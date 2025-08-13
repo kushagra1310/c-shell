@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "stringlib.h": "c",
+        "headerfiles.h": "c"
+    }
+}

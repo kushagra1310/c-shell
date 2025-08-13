@@ -1,11 +1,32 @@
 #ifndef SHELL_H
 #define SHELL_H
 
+#include <stdbool.h>
+#include "stringlib.h"
+#include "vectorlib.h"
+
+
+void get_command(char *buf);
+
+bool parse_shell_cmd(char *inp);
+
+
+void display_prompt(void);
+
 char *get_username(int output_copy);
 char *get_systemname(int output_copy);
 char *get_current_dir(int output_copy);
 void display_tilde(char *original_path);
-void display_prompt(void);
-void get_command(char *buf);
+
+
+
+vector_t *tokenize_input(char *inp);
+
+bool is_name(string_t token);
+bool is_input(string_t token1, string_t token2);
+bool is_output(string_t token1, string_t token2);
+bool parse_atomic(vector_t *token_list, char *inp, int *x_pointer);
+bool parse_cmd_group(vector_t *token_list, char *inp, int *x_pointer);
+
 
 #endif

@@ -137,9 +137,12 @@ char *get_current_dir(int output_copy)
 
 void display_tilde(char *original_path)
 {
-    const char *home = getenv("HOME");
-    if (!home)
-        return; // fallback
+    char home[4097]; // check document again for clarification
+    if(!getcwd(home, sizeof(home)))
+    {
+        perror("getcwd failed");
+        exit(1);
+    }
     int home_len = strlen(home);
     if (strncmp(original_path, home, home_len) == 0) // check if it starts with home directory
     {

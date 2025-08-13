@@ -7,6 +7,8 @@ int main()
         display_prompt();
         char* inp=malloc(1025*sizeof(int));
         get_command(inp);
+        if(!parse_shell_cmd(inp))
+        printf("Invalid Syntax!");
         free(inp);
     }
     return 0;
