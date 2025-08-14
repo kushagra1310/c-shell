@@ -2,8 +2,8 @@
 
 CC = gcc
 CFLAGS = -std=c99 -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -Wall -Wextra -Werror -Wno-unused-parameter -fno-asm
-SRC = src/part_A1.c src/part_A2.c src/part_A3.c src/main.c 
-OBJ = src/part_A1.o src/part_A2.o src/part_A3.o src/main.o
+SRC = src/part_A1.c src/part_A2.c src/part_A3.c src/part_B1.c src/main.c 
+OBJ = src/part_A1.o src/part_A2.o src/part_A3.o src/part_B1.o src/main.o
 
 TARGET = shell.out
 

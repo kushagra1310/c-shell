@@ -7,4 +7,6 @@ void get_command(char* buf)
         perror("fgets failed");
         exit(1);
     }
+    //LLM used
+    buf[strcspn(buf, "\n")] = '\0';
 }

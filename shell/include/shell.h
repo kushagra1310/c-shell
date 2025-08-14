@@ -11,12 +11,12 @@ void get_command(char *buf);
 bool parse_shell_cmd(char *inp);
 
 
-void display_prompt(void);
+void display_prompt(char* home_dir);
 
 char *get_username(int output_copy);
 char *get_systemname(int output_copy);
 char *get_current_dir(int output_copy);
-void display_tilde(char *original_path);
+void display_tilde(char *original_path, char* home);
 
 
 
@@ -28,5 +28,6 @@ bool is_output(string_t token1, string_t token2);
 bool parse_atomic(vector_t *token_list, char *inp, int *x_pointer);
 bool parse_cmd_group(vector_t *token_list, char *inp, int *x_pointer);
 
+void hop_function(vector_t *token_list,char* home_dir, char* prev_dir);
 
 #endif

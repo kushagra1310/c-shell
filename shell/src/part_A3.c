@@ -97,7 +97,7 @@ bool parse_atomic(vector_t *token_list, char *inp, int *x_pointer)
             string_t temp_2 = ((string_t *)(token_list->data))[*x_pointer + 1];
             if (is_input(temp, temp_2) || is_output(temp, temp_2))
             {
-                (*x_pointer)++;
+                (*x_pointer)+=2;
             }
             else
                 break;
@@ -117,12 +117,13 @@ bool parse_cmd_group(vector_t *token_list, char *inp, int *x_pointer)
     {
         return false;
     }
-    for (int i = *x_pointer; i < (int)(token_list->size) && *x_pointer < (int)(token_list->size); i++)
+    while (*x_pointer < (int)(token_list->size))
     {
         temp = ((string_t *)token_list->data)[*x_pointer];
         if (strcmp(temp.data, "|") != 0)
         {
-            return false;
+            // printf("debug here\n");
+            return true;
         }
         else
             (*x_pointer)++;
