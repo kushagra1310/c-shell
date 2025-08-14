@@ -34,6 +34,7 @@ typedef struct {
 void vector_init(vector_t *vec, size_t elem_size, size_t capacity);
 void vector_init_with_destructor(vector_t *vec, size_t elem_size, size_t capacity, vector_destructor_fn destructor);
 void vector_free(vector_t *vec);
+void vector_sort(vector_t *vec, int (*comparator)(const void *, const void *));
 int vector_reserve(vector_t *v, size_t new_capacity);
 int vector_shrink_to_fit(vector_t *v);
 static inline size_t vector_size(const vector_t *v) { return v->size; }
@@ -94,6 +95,10 @@ void vector_free(vector_t *vec) {
     vec->data = NULL;
     vec->size = vec->capacity = vec->elem_size = 0;
     vec->destructor = NULL;
+}
+
+void vector_sort(vector_t *vec, int (*comparator)(const void *, const void *)) {
+    qsort(vec->data, vec->size, vec->elem_size, comparator);
 }
 
 int vector_reserve(vector_t *v, size_t new_capacity) {

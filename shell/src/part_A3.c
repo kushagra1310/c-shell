@@ -1,4 +1,4 @@
-#define VECTOR_IMPLEMENTATION
+// #define VECTOR_IMPLEMENTATION
 #define DYNSTRING_IMPLEMENTATION
 #include "../include/vectorlib.h"
 #include "../include/stringlib.h"

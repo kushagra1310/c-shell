@@ -20,6 +20,10 @@ int main()
             {
                 hop_function(token_list,home_dir,prev_dir);
             }
+            else if((int)token_list->size>0 && strcmp(((string_t*)token_list->data)[0].data,"reveal")==0)
+            {
+                reveal_function(token_list,home_dir,prev_dir);
+            }
         }
         free(inp);
     }

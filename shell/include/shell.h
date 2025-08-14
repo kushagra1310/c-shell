@@ -2,6 +2,7 @@
 #define SHELL_H
 
 #include <stdbool.h>
+#include <dirent.h>
 #include "stringlib.h"
 #include "vectorlib.h"
 
@@ -28,6 +29,9 @@ bool is_output(string_t token1, string_t token2);
 bool parse_atomic(vector_t *token_list, char *inp, int *x_pointer);
 bool parse_cmd_group(vector_t *token_list, char *inp, int *x_pointer);
 
-void hop_function(vector_t *token_list,char* home_dir, char* prev_dir);
+void hop_function(vector_t *token_list, char* home_dir, char* prev_dir);
+void reveal_function(vector_t *token_list, char* home_dir, char *prev_dir);
+int string_comparator(const void *a, const void *b);
+void print_lexicographically(DIR *d);
 
 #endif
