@@ -3,7 +3,8 @@
 int main()
 {
     char home_dir[]="/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell";
-    char* prev_dir=strdup(home_dir);
+    char *prev_dir=malloc(4097*sizeof(char));
+    strcpy(prev_dir,home_dir);
     
     while(1)
     {
