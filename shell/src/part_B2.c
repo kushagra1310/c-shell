@@ -104,6 +104,17 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
     getcwd(cur_dir, sizeof(cur_dir));
     int l_flag = 0, a_flag = 0;
     DIR *d;
+    if (x_pointer == (int)token_list->size)
+    {
+        d = opendir(cur_dir);
+        if (d == NULL)
+        {
+            perror("opendir failed");
+            return;
+        }
+        check_and_print(d, l_flag, a_flag);
+        return;
+    }
     while (x_pointer < (int)token_list->size)
     {
         string_t temp = ((string_t *)token_list->data)[x_pointer];
@@ -142,11 +153,11 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
         }
         else if (!strcmp(temp.data, ".."))
         {
-            
+
             char parent[4097];
             strcpy(parent, cur_dir);
             char *last_slash = strrchr(parent, '/');
-            
+
             if (last_slash != NULL && last_slash != parent)
             {
                 *last_slash = '\0'; // terminate before last directory
@@ -157,7 +168,7 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
                 perror("opendir failed");
                 return;
             }
-            check_and_print(d,l_flag,a_flag);
+            check_and_print(d, l_flag, a_flag);
             break;
         }
         else if (temp.data[0] == '-')
@@ -181,7 +192,7 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
         }
         else
         {
-            d=opendir(temp.data);
+            d = opendir(temp.data);
             if (d == NULL)
             {
                 perror("opendir failed");

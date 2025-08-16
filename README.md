@@ -2,3 +2,8 @@
 ## ASSUMPTIONS
 ### Part A1:
 Max size of username and system-name is 1024 bytes
+Things left to fix:
+error handling for some functions
+log command handling semicolon and stuff
+int to long long / size of argument arrays etc
+return instead of exit

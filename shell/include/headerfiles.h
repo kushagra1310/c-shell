@@ -7,5 +7,6 @@
 #include <stddef.h>   
 #include <stdint.h>   
 #include <stdbool.h>
+#include <fcntl.h>
 // #include "stringlib.h"
 // #include "vectorlib.h"

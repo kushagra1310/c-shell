@@ -36,7 +36,7 @@ void log_add(char *inp, Queue *log_list)
 void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_dir, Queue *log_list)
 {
     string_t temp;
-    if (token_list->size > 0 && token_list->size <= 3)
+    if ((int)token_list->size > 0)
         temp = ((string_t *)token_list->data)[0];
     else
     {
@@ -45,7 +45,13 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
     }
     if (!strcmp(temp.data, "log"))
     {
-        if (token_list->size > 1)
+        if((int)token_list->size > 3)
+        {
+            printf("Empty/Invalid command %d arguments\n",(int)token_list->size);
+            return;
+        }
+
+        if ((int)token_list->size > 1)
         {
             temp = ((string_t *)token_list->data)[1];
             if (!strcmp(temp.data, "purge"))
