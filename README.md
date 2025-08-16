@@ -10,4 +10,5 @@ return instead of exit
 input/output/appending rechecking
 double free
 hardcoded file path
+the "" thing
 <!-- log file spacing issue -->

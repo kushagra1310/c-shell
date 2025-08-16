@@ -40,4 +40,6 @@ void print_lexicographically(DIR *d);
 void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_dir, Queue *log_list);
 void log_add(char *inp, Queue *log_list);
 int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list);
+int decide_and_call(char* inp, vector_t *to_be_passed, char *home_dir, char *prev_dir,Queue *log_list);
+int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int* pipe_fd, vector_t* pids);
 #endif

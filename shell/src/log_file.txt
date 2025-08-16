@@ -1,9 +1,3 @@
-hop s
-hop ..
-hop src
-hop ..
-hop include
-hop ..
 hop .
 hop -
 hop hehe
@@ -13,3 +7,9 @@ hop src
 hop ~
 hop .
 hop src
+hop include
+hop src
+ls | grep -w include input.txt | grep include
+hop src
+hop ..
+ls -l | grep ".txt" | sort -r
