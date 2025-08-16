@@ -13,7 +13,7 @@ int decide_and_call(char* inp, vector_t *to_be_passed, char *home_dir, char *pre
     {
         reveal_function(to_be_passed, home_dir, prev_dir);
     }
-    else
+    else if((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "log") != 0)
     {
         int rc=fork();
         char** args=malloc(4096*sizeof(char*));
@@ -101,6 +101,10 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list)
             dup2(terminal_input_copy,STDIN_FILENO);
             dup2(terminal_output_copy,STDOUT_FILENO);
             break;
+        }
+        else if(!strcmp(temp.data, "|"))
+        {
+
         }
         else
         {

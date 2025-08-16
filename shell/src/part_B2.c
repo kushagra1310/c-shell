@@ -31,6 +31,8 @@ void print_lexicographically(DIR *d)
         printf("%s ", ((string_t *)file_list->data)[i].data);
     }
     printf("\n");
+    vector_free(file_list); 
+    free(file_list); 
 }
 void print_lexicographically_l(DIR *d)
 {
@@ -50,6 +52,8 @@ void print_lexicographically_l(DIR *d)
     {
         printf("%s\n", ((string_t *)file_list->data)[i].data);
     }
+    vector_free(file_list); 
+    free(file_list); 
 }
 void print_lexicographically_a(DIR *d)
 {
@@ -68,6 +72,8 @@ void print_lexicographically_a(DIR *d)
         printf("%s ", ((string_t *)file_list->data)[i].data);
     }
     printf("\n");
+    vector_free(file_list); 
+    free(file_list); 
 }
 void print_lexicographically_al(DIR *d)
 {
@@ -85,6 +91,8 @@ void print_lexicographically_al(DIR *d)
     {
         printf("%s\n", ((string_t *)file_list->data)[i].data);
     }
+    vector_free(file_list); 
+    free(file_list); 
 }
 void check_and_print(DIR *d, int l_flag, int a_flag)
 {

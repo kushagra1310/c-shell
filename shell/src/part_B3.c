@@ -10,19 +10,20 @@ void log_add(char *inp, Queue *log_list)
     {
         char *inp_dup = strdup(inp);
         enqueue(log_list, inp_dup);
-        if (queue_get_size(log_list) >= 15)
+        if (queue_get_size(log_list) > 15)
         {
-            dequeue(log_list);
+            char *oldest_command = dequeue(log_list);
+            free(oldest_command);
             fclose(log_file);
             log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "w");
-            Node *pointer = log_list->rear;
+            Node *pointer = log_list->front;
             while (pointer != NULL)
             {
                 fwrite(pointer->data, sizeof(char), strlen(pointer->data), log_file);
                 fwrite("\n", sizeof(char), 1, log_file);
                 pointer = pointer->next;
             }
-            fclose(log_file);
+            // fclose(log_file);
         }
         else
         {
@@ -30,7 +31,6 @@ void log_add(char *inp, Queue *log_list)
             fwrite("\n", sizeof(char), 1, log_file);
         }
     }
-
     fclose(log_file);
 }
 void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_dir, Queue *log_list)
@@ -45,9 +45,9 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
     }
     if (!strcmp(temp.data, "log"))
     {
-        if((int)token_list->size > 3)
+        if ((int)token_list->size > 3)
         {
-            printf("Empty/Invalid command %d arguments\n",(int)token_list->size);
+            printf("Empty/Invalid command %d arguments\n", (int)token_list->size);
             return;
         }
 
@@ -58,6 +58,8 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
             {
                 FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "w");
                 fclose(log_file);
+                while(!queue_is_empty(log_list))
+                dequeue(log_list);
             }
             else if (!strcmp(temp.data, "execute"))
             {
@@ -108,7 +110,7 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
                 char buffer[4097];
                 while (fgets(buffer, sizeof(buffer), log_file) != NULL)
                 {
-                    printf("%s\n",buffer);
+                    printf("%s\n", buffer);
                 }
                 fclose(log_file);
             }

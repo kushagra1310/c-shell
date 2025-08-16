@@ -13,6 +13,11 @@ int main()
         char buffer[4097];
         while (fgets(buffer, sizeof(buffer), log_file) != NULL)
         {
+            int len = strlen(buffer);
+            if (len > 0 && buffer[len - 1] == '\n')
+            {
+                buffer[len - 1] = '\0';
+            }
             char *line = strdup(buffer);
             if (!line)
             {

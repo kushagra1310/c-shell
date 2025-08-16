@@ -7,3 +7,7 @@ error handling for some functions
 log command handling semicolon and stuff
 int to long long / size of argument arrays etc
 return instead of exit
+input/output/appending rechecking
+double free
+hardcoded file path
+<!-- log file spacing issue -->
