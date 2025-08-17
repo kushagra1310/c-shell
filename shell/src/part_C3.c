@@ -4,7 +4,7 @@
 #include "../include/queue.h"
 #include "../include/shell.h"
 
-int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int* pipe_fd, vector_t* pids)
+int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int* pipe_fd, vector_t* pids, vector_t* bg_job_list,bool should_log)
 {
     int rc = fork();
     if (!rc)
@@ -14,7 +14,7 @@ int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_
         close(pipe_fd[1]);
 
         // Execute the command we've built so far
-        decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list);
+        decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list,bg_job_list, should_log);
         exit(0);
     }
     int *copy=malloc(sizeof(int));

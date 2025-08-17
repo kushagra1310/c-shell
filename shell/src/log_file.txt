@@ -1,0 +1,15 @@
+hop ..
+hop -
+hop p
+echo a
+echo b
+echo c
+echo d
+echo e
+echo f
+echo h
+echo g
+echo i
+echo j
+echo k
+echo l
