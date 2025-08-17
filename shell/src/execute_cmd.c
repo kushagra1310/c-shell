@@ -95,7 +95,26 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list)
                 dup2(file_output, STDOUT_FILENO);
             }
         }
-        else if (!strcmp(temp.data, "&") || !strcmp(temp.data, ";") || !strcmp(temp.data, "&&"))
+        else if (!strcmp(temp.data, ";"))
+        {
+            if (strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0)
+            {
+                // If it is hop, run directly as ow it wouldn't be visible in the prompt
+                decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list);
+            }
+            else
+            {
+                int rc = fork();
+                if (!rc)
+                {
+                    decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list);
+                    exit(0);
+                }
+                waitpid(rc,NULL,0);
+            }
+            vector_clear(to_be_passed);
+        }
+        else if (!strcmp(temp.data, "&") || !strcmp(temp.data, "&&"))
         {
             decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list);
             vector_clear(to_be_passed);
