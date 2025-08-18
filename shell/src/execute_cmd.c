@@ -13,9 +13,12 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
     {
         reveal_function(to_be_passed, home_dir, prev_dir);
     }
+    else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "activities") == 0)
+    {
+        activity_function(bg_job_list);
+    }
     else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "log") != 0)
     {
-        int rc = fork();
         char **args = malloc(4096 * sizeof(char *));
         if ((int)to_be_passed->size > 4096)
         {
@@ -28,27 +31,17 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
             args[args_count] = strdup(temp.data);
         }
         args[args_count] = NULL;
-        if (!rc)
-        {
-            execvp(args[0], args);
-            perror("exec failed");
-            return 1;
-        }
-        else if (rc > 0)
-            wait(NULL);
-        else
-        {
-            perror("fork failed");
-            return 1;
-        }
-        for (int i = 0; i < args_count; i++)
-        {
-            free(args[i]);
-        }
-        free(args);
+        execvp(args[0], args);
+        perror("exec failed");
+        return 1;
+        // for (int i = 0; i < args_count; i++)
+        // {
+        //     free(args[i]);
+        // }
+        // free(args);
     }
-    if(should_log)
-    log_function(to_be_passed, inp, prev_dir, home_dir, log_list, bg_job_list);
+    if (should_log)
+        log_function(to_be_passed, inp, prev_dir, home_dir, log_list, bg_job_list);
     return 0;
 }
 int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vector_t *bg_job_list, bool should_log)
@@ -118,17 +111,17 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         else if (!strcmp(temp.data, "&"))
         {
             int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size].job_number + 1) : 1;
+            char cmd_name[4097]={0};
+            for (int i = 0; i < (int)to_be_passed->size; i++)
+            {
+                char *cmd_part = strdup(((string_t *)to_be_passed->data)[i].data);
+                strcat(cmd_name, cmd_part);
+                char *l = strdup(" ");
+                strcat(cmd_name, l);
+            }
             int rc = fork();
             if (!rc)
             {
-                char cmd_name[4097];
-                for (int i = 0; i < (int)to_be_passed->size; i++)
-                {
-                    char *cmd_part = strdup(((string_t *)to_be_passed->data)[i].data);
-                    strcat(cmd_name, cmd_part);
-                    char *l = strdup(" ");
-                    strcat(cmd_name, l);
-                }
                 // LLM used
                 int dev_null_fd = open("/dev/null", O_RDONLY);
                 if (dev_null_fd != -1)
@@ -137,22 +130,21 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     close(dev_null_fd);
                 }
                 // LLM used
-                bg_job *current_job = malloc(sizeof(current_job));
-                current_job->command_name = strdup(cmd_name);
-                current_job->job_number = new_job_no;
-                current_job->pid = (int)getpid();
-                vector_push_back(bg_job_list, current_job);
-                if (!decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list,bg_job_list, should_log))
+                if (!decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log))
                 {
-                    printf("%s with pid %d exited normally\n", current_job->command_name, current_job->pid);
                     exit(0);
                 }
                 else
                 {
-                    printf("%s with pid %d exited abnormally\n", current_job->command_name, current_job->pid);
                     exit(1);
                 }
             }
+            bg_job *current_job = malloc(sizeof(bg_job));
+            current_job->command_name = strdup(cmd_name);
+            current_job->job_number = new_job_no;
+            current_job->pid = rc;
+            current_job->state = strdup("Running");
+            vector_push_back(bg_job_list, current_job);
             printf("[%d] %d\n", new_job_no, rc);
             vector_clear(to_be_passed);
         }
@@ -160,7 +152,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         {
             int pipe_fd[2];
             pipe(pipe_fd);
-            pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids,bg_job_list, should_log);
+            pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log);
         }
         else
         {

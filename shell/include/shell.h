@@ -11,8 +11,11 @@ typedef struct
 {
     int pid;            // process ID
     char *command_name; // name of the command (for printing messages)
+    char *state;
     int job_number;     // job number [1], [2], etc
 } bg_job; // for storing background jobs that are being executed
+
+
 
 void get_command(char *buf);
 
@@ -42,4 +45,5 @@ void log_add(char *inp, Queue *log_list);
 int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vector_t* bg_job_list, bool should_log);
 int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list,vector_t *bg_job_list, bool should_log);
 int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int* pipe_fd, vector_t* pids, vector_t* bg_job_list, bool should_log);
+int activity_function(vector_t* bg_job_list);
 #endif

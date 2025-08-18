@@ -155,7 +155,7 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
                 char buffer[4097];
                 while (fgets(buffer, sizeof(buffer), log_file) != NULL)
                 {
-                    printf("%s\n", buffer);
+                    printf("%s", buffer);
                 }
                 fclose(log_file);
             }

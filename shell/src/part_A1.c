@@ -24,7 +24,7 @@ char *get_username(int output_copy)
     }
     else
     {
-        wait(NULL);
+        waitpid(rc,NULL,0);
         close(fd[1]);
         dup2(output_copy, STDOUT_FILENO);
         char *store_username = malloc(1025 * sizeof(char));
@@ -69,7 +69,7 @@ char *get_systemname(int output_copy)
     }
     else
     {
-        wait(NULL);
+        waitpid(rc,NULL,0);
         close(fd[1]);
         dup2(output_copy, STDOUT_FILENO);
         char *store_systemname = malloc(1025 * sizeof(char));

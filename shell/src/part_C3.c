@@ -21,10 +21,9 @@ int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_
     *copy=rc;
     vector_push_back(pids, copy);   // Save the child's PID
     close(pipe_fd[1]);              // Parent doesn't write to this pipe
-    dup2(pipe_fd[0], STDIN_FILENO); // Redirect PARENT'S input from the pipe
+    dup2(pipe_fd[0], STDIN_FILENO); // Redirect parent's input from the pipe
     close(pipe_fd[0]);
 
-    // Clear the command vector to start building the next command
     vector_clear(to_be_passed);
     return 0;
 }

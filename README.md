@@ -11,4 +11,6 @@ input/output/appending rechecking
 double free
 hardcoded file path
 the "" thing
+check when the background execution message has to be displayed
+only bg ones handled in e1
 <!-- log file spacing issue -->
