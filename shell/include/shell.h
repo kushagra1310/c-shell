@@ -46,4 +46,5 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
 int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list,vector_t *bg_job_list, bool should_log);
 int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int* pipe_fd, vector_t* pids, vector_t* bg_job_list, bool should_log);
 int activity_function(vector_t* bg_job_list);
+int ping_function(int pid, int sig_no);
 #endif

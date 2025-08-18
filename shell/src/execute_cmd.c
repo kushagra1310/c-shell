@@ -17,6 +17,26 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
     {
         activity_function(bg_job_list);
     }
+    else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "ping") == 0)
+    {
+        char *pid_str = strdup(((string_t *)to_be_passed->data)[1].data);
+        char *endptr;
+        long pid_num = strtol(pid_str, &endptr, 10);
+        if (*endptr != '\0')
+        {
+            return 1;
+        }
+        char* sig_str=strdup(((string_t *)to_be_passed->data)[2].data);
+        
+        long sig_num = strtol(sig_str, &endptr, 10);
+        if (*endptr != '\0')
+        {
+            return 1;
+        }
+        ping_function((int)pid_num,(int)sig_num);
+        free(sig_str);
+        free(pid_str);
+    }
     else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "log") != 0)
     {
         char **args = malloc(4096 * sizeof(char *));
@@ -111,7 +131,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         else if (!strcmp(temp.data, "&"))
         {
             int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size].job_number + 1) : 1;
-            char cmd_name[4097]={0};
+            char cmd_name[4097] = {0};
             for (int i = 0; i < (int)to_be_passed->size; i++)
             {
                 char *cmd_part = strdup(((string_t *)to_be_passed->data)[i].data);
