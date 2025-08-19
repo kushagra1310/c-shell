@@ -4,6 +4,8 @@
 #include "../include/headerfiles.h"
 #include "../include/shell.h"
 extern pid_t foreground_pgid;
+extern int bg_job_no;
+extern fg_job* current_fg_job;
 int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, vector_t *bg_job_list, bool should_log)
 {
     if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0)
@@ -69,7 +71,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
 {
     vector_t *token_list = tokenize_input(inp);
     vector_t *pids = malloc(sizeof(vector_t));
-    vector_init(pids, sizeof(pid_t), 0);
+    vector_init(pids, sizeof(fg_job), 0);
     vector_t *to_be_passed = malloc(sizeof(vector_t));
     vector_init_with_destructor(to_be_passed, sizeof(string_t), 0, (vector_destructor_fn)string_free);
     int x_pointer = 0;
@@ -133,6 +135,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         else if (!strcmp(temp.data, "&"))
         {
             int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size].job_number + 1) : 1;
+            bg_job_no = new_job_no + 1;
             char cmd_name[4097] = {0};
             for (int i = 0; i < (int)to_be_passed->size; i++)
             {
@@ -204,7 +207,26 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             {
                 current_pgid = rc;
             }
-            vector_push_back(pids, &rc);
+            fg_job *copy = malloc(sizeof(fg_job));
+            copy->pid = rc;
+            char cmd_name[4097] = {0};
+            for (int i = 0; i < (int)to_be_passed->size; i++)
+            {
+                char *cmd_part = strdup(((string_t *)to_be_passed->data)[i].data);
+                strcat(cmd_name, cmd_part);
+                char *l = strdup(" ");
+                strcat(cmd_name, l);
+            }
+            copy->command_name = strdup(cmd_name);
+            if (!current_fg_job)
+            {
+                current_fg_job = copy;
+            }
+            else
+            {
+                strcat(current_fg_job->command_name, copy->command_name);
+            }
+            vector_push_back(pids, &copy);
         }
     }
     // Restoring standard input output from terminal just to be sure
@@ -217,8 +239,9 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         foreground_pgid = current_pgid;
     }
 
-    for (int i = 0; i < (int)pids->size; i++) {
-        int current_pid_ptr = ((int *)pids->data)[i];
+    for (int i = 0; i < (int)pids->size; i++)
+    {
+        pid_t current_pid_ptr = ((fg_job *)pids->data)[i].pid;
         waitpid(current_pid_ptr, NULL, 0);
     }
     foreground_pgid = -1;

@@ -3,6 +3,8 @@
 #include "../include/queue.h"
 #include <signal.h>
 pid_t foreground_pgid = -1;
+fg_job *current_fg_job = NULL;
+int bg_job_no = 1; // to store the next job number index
 // LLM
 void sigint_handler(int signum)
 {
@@ -12,9 +14,34 @@ void sigint_handler(int signum)
     }
 }
 // LLM
+
+void sigtstp_handler(int signum)
+{
+    if (current_fg_job == NULL)
+    {
+        return; // No foreground job to stop
+    }
+
+    // Send SIGTSTP to the entire process group
+    kill(-(current_fg_job->pid), SIGTSTP);
+
+    bg_job *current_job = malloc(sizeof(bg_job));
+    current_job->command_name = strdup(current_fg_job->command_name);
+    current_job->job_number = bg_job_no;
+    current_job->pid = current_fg_job->pid;
+    current_job->state = strdup("Stopped");
+
+    // Print the message
+    printf("\n[%d] Stopped   %s\n", bg_job_no, current_fg_job->command_name);
+
+    free(current_fg_job->command_name);
+    free(current_fg_job);
+    current_fg_job = NULL;
+}
 int main()
 {
     signal(SIGINT, sigint_handler);
+    signal(SIGTSTP, sigtstp_handler);
     char home_dir[] = "/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell";
     Queue *log_list = queue_create();
     char *prev_dir = malloc(4097 * sizeof(char));
@@ -36,7 +63,7 @@ int main()
                 kill(child_pid, SIGKILL);
             }
             free(inp);
-            exit(0); 
+            exit(0);
         }
         for (int i = 0; i < (int)bg_job_list->size; i++)
         {

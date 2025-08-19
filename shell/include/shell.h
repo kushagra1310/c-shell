@@ -15,7 +15,11 @@ typedef struct
     int job_number;     // job number [1], [2], etc
 } bg_job; // for storing background jobs that are being executed
 
-
+typedef struct
+{
+    pid_t pid;
+    char* command_name;
+} fg_job;
 
 int get_command(char *buf);
 
