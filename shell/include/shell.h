@@ -17,7 +17,7 @@ typedef struct
 
 
 
-void get_command(char *buf);
+int get_command(char *buf);
 
 bool parse_shell_cmd(char *inp);
 

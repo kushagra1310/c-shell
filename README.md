@@ -13,4 +13,5 @@ hardcoded file path
 the "" thing
 check when the background execution message has to be displayed
 only bg ones handled in e1
+confirm exact requirements of ctrl c, ctrl d
 <!-- log file spacing issue -->

@@ -27,7 +27,17 @@ int main()
         // int status;
 
         char *inp = malloc(1025 * sizeof(char));
-        get_command(inp);
+        if (get_command(inp))
+        {
+            printf("logout\n");
+            for (int i = 0; i < (int)bg_job_list->size; i++)
+            {
+                pid_t child_pid = ((bg_job *)bg_job_list->data)[i].pid;
+                kill(child_pid, SIGKILL);
+            }
+            free(inp);
+            exit(0); 
+        }
         for (int i = 0; i < (int)bg_job_list->size; i++)
         {
             // LLM used
