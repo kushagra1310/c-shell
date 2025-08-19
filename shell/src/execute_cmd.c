@@ -3,6 +3,7 @@
 #include "../include/queue.h"
 #include "../include/headerfiles.h"
 #include "../include/shell.h"
+extern pid_t foreground_pgid;
 int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, vector_t *bg_job_list, bool should_log)
 {
     if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0)
@@ -26,14 +27,14 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
         {
             return 1;
         }
-        char* sig_str=strdup(((string_t *)to_be_passed->data)[2].data);
-        
+        char *sig_str = strdup(((string_t *)to_be_passed->data)[2].data);
+
         long sig_num = strtol(sig_str, &endptr, 10);
         if (*endptr != '\0')
         {
             return 1;
         }
-        ping_function((int)pid_num,(int)sig_num);
+        ping_function((int)pid_num, (int)sig_num);
         free(sig_str);
         free(pid_str);
     }
@@ -75,6 +76,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     int terminal_output_copy = dup(STDOUT_FILENO);
     int terminal_input_copy = dup(STDIN_FILENO);
     int file_input = -1, file_output = -1;
+    pid_t current_pgid = 0; // local pgid
     while (x_pointer < (int)token_list->size)
     {
         string_t temp = ((string_t *)token_list->data)[x_pointer++];
@@ -172,7 +174,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         {
             int pipe_fd[2];
             pipe(pipe_fd);
-            pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log);
+            pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log, &current_pgid);
         }
         else
         {
@@ -194,8 +196,13 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             int rc = fork();
             if (!rc)
             {
+                setpgid(0, current_pgid);
                 decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
                 exit(0);
+            }
+            if (current_pgid == 0)
+            {
+                current_pgid = rc;
             }
             vector_push_back(pids, &rc);
         }
@@ -205,12 +212,17 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     dup2(terminal_output_copy, STDOUT_FILENO);
     close(terminal_input_copy);
     close(terminal_output_copy);
-    // Waiting for completion
-    for (int i = 0; i < (int)pids->size; i++)
+    if (pids->size > 0)
     {
-        pid_t current_pid = ((pid_t *)pids->data)[i];
-        waitpid(current_pid, NULL, 0);
+        foreground_pgid = current_pgid;
     }
+
+    for (int i = 0; i < (int)pids->size; i++) {
+        int current_pid_ptr = ((int *)pids->data)[i];
+        waitpid(current_pid_ptr, NULL, 0);
+    }
+    foreground_pgid = -1;
+
     vector_free(pids);
     free(pids);
     vector_free(to_be_passed);
