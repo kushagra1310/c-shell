@@ -38,6 +38,7 @@ void sigtstp_handler(int signum)
     free(current_fg_job);
     current_fg_job = NULL;
 }
+
 int main()
 {
     signal(SIGINT, sigint_handler);

@@ -3,9 +3,11 @@
 #include "../include/queue.h"
 #include "../include/headerfiles.h"
 #include "../include/shell.h"
+
 extern pid_t foreground_pgid;
 extern int bg_job_no;
-extern fg_job* current_fg_job;
+extern fg_job *current_fg_job;
+
 int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, vector_t *bg_job_list, bool should_log)
 {
     if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0)
@@ -39,6 +41,24 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
         ping_function((int)pid_num, (int)sig_num);
         free(sig_str);
         free(pid_str);
+    }
+    else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "fg") == 0)
+    {
+        int job_to_fg=-1;
+        if (to_be_passed->size < 2)
+        {
+            // No job number provided, use the most recent one
+            if (bg_job_list->size > 0)
+            {
+                job_to_fg = bg_job_list->size - 1;
+            }
+        }
+        else
+        {
+            char* job_to_fg_str=strdup(((string_t *)to_be_passed->data)[1].data);
+            job_to_fg=strtol(job_to_fg_str,NULL,10);
+        }
+        fg(bg_job_list,job_to_fg);
     }
     else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "log") != 0)
     {
@@ -192,6 +212,10 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         if (strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0)
         {
             // If it is hop, run directly as ow it wouldn't be visible in the prompt
+            decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
+        }
+        else if(strcmp(((string_t *)to_be_passed->data)[0].data, "fg") == 0)
+        {
             decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
         }
         else

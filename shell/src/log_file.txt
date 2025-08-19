@@ -1,13 +1,15 @@
-ping 100000000 1
-ping 1902048 15
-ping 1904141 15
+fg 1
 hop src
-hop ..
-ls | grep include | hop src
-hop src
-hop ..
-hop src
-hop ..
-hop src
-hop ..
+fg 1
 activities
+fg 1
+activities
+fg 1
+activities
+fg 1
+activities
+fg 1
+activities
+fg 1
+activities
+fg 1

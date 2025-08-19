@@ -51,4 +51,7 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
 int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int* pipe_fd, vector_t* pids, vector_t* bg_job_list, bool should_log, pid_t* pgid);
 int activity_function(vector_t* bg_job_list);
 int ping_function(int pid, int sig_no);
+bg_job *find_job_by_number(vector_t *bg_job_list, int job_num);
+int find_job_by_number_num(vector_t *bg_job_list, int job_num);
+int fg(vector_t *bg_job_list, int job_number);
 #endif
