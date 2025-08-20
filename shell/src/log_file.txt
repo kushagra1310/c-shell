@@ -1,15 +1,15 @@
-sleep 5 | ls
+activities
 sleep 5
-sleep 100 | ls
-sleep 5 | ls
-sleep 10 
-ls | wc -l
-echo "hello world" | cat | wc -w
-ls -la | grep "^d"
-ls -la | grep "^s"
-ls
-ls -la
-ls -la | grep -v "^d" | wc -l
-echo -e "banana\\napple\\ncherry" | sort | head -2
-cat /etc/passwd | head -5 | cut -d: -f1
-ps aux | grep -v grep | head -10 | awk '{print $2, $11}'
+activities
+bg 1
+activities
+sleep 5
+activities
+bg 1
+activities
+bg 1
+activities
+sleep 5
+activities
+bg 1
+activities

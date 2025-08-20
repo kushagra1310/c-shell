@@ -7,7 +7,7 @@
 extern pid_t foreground_pgid;
 extern int bg_job_no;
 extern fg_job *current_fg_job;
-
+extern pid_t shell_pgid;
 int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, vector_t *bg_job_list, bool should_log)
 {
     if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0)
@@ -125,6 +125,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     int terminal_input_copy = dup(STDIN_FILENO);
     int file_input = -1, file_output = -1;
     pid_t current_pgid = 0; // local pgid
+
     while (x_pointer < (int)token_list->size)
     {
         string_t temp = ((string_t *)token_list->data)[x_pointer++];
@@ -171,6 +172,11 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                 int rc = fork();
                 if (!rc)
                 {
+                    signal(SIGINT, SIG_DFL);
+                    signal(SIGTSTP, SIG_DFL);
+                    signal(SIGTTIN, SIG_DFL);
+                    signal(SIGTTOU, SIG_DFL);
+
                     decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
                     exit(0);
                 }
@@ -195,6 +201,11 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             if (!rc)
             {
                 // LLM used
+                signal(SIGINT, SIG_DFL);
+                signal(SIGTSTP, SIG_DFL);
+                signal(SIGTTIN, SIG_DFL);
+                signal(SIGTTOU, SIG_DFL);
+
                 int dev_null_fd = open("/dev/null", O_RDONLY);
                 if (dev_null_fd != -1)
                 {
@@ -227,8 +238,8 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             fg_job *pipe_job = NULL;
             if (pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log, &current_pgid, &pipe_job) == 0)
             {
-                //LLM
-                // Handle the job info returned from pipe_function
+                // LLM
+                //  Handle the job info returned from pipe_function
                 if (pipe_job)
                 {
                     if (!current_fg_job)
@@ -281,6 +292,11 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             int rc = fork();
             if (!rc)
             {
+                signal(SIGINT, SIG_DFL);
+                signal(SIGTSTP, SIG_DFL);
+                signal(SIGTTIN, SIG_DFL);
+                signal(SIGTTOU, SIG_DFL);
+
                 setpgid(0, current_pgid);
                 decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
                 exit(0);
@@ -320,18 +336,46 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     if (pids->size > 0)
     {
         foreground_pgid = current_pgid;
+        tcsetpgrp(STDIN_FILENO, foreground_pgid);
     }
 
     for (int i = 0; i < (int)pids->size; i++)
     {
-        pid_t current_pid_ptr = ((fg_job *)pids->data)[i].pid;
-        waitpid(current_pid_ptr, NULL, 0);
+        pid_t child_pid = ((fg_job *)pids->data)[i].pid;
+        int status;
+        waitpid(child_pid, &status, WUNTRACED);
+
+        // Case 1: The process finished normally (like sleep 5) or was killed.
+        if (WIFEXITED(status) || WIFSIGNALED(status))
+        {
+            // This process is done. Continue the loop to wait for others.
+            continue;
+        }
+        // Case 2: The process was STOPPED by Ctrl-Z.
+        else if (WIFSTOPPED(status))
+        {
+            printf("\n[%d] Stopped\t%s\n", bg_job_no, current_fg_job->command_name);
+            fflush(stdout);
+
+            bg_job stopped_job;
+            stopped_job.pid = child_pid; 
+            stopped_job.job_number = bg_job_no;
+            stopped_job.command_name = strdup(current_fg_job->command_name);
+            stopped_job.state = strdup("Stopped");
+            vector_push_back(bg_job_list, &stopped_job);
+            bg_job_no++;
+            
+            // The whole job is stopped, so break the wait loop.
+            break; 
+        }
     }
+
+    tcsetpgrp(STDIN_FILENO, shell_pgid);
     if (current_fg_job)
     {
         free(current_fg_job->command_name);
         free(current_fg_job);
-        current_fg_job = NULL; // Important!
+        current_fg_job = NULL;
     }
     foreground_pgid = -1;
 
