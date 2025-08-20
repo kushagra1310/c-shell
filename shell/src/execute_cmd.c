@@ -44,7 +44,7 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
     }
     else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "fg") == 0)
     {
-        int job_to_fg=-1;
+        int job_to_fg = -1;
         if (to_be_passed->size < 2)
         {
             // No job number provided, use the most recent one
@@ -55,10 +55,27 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
         }
         else
         {
-            char* job_to_fg_str=strdup(((string_t *)to_be_passed->data)[1].data);
-            job_to_fg=strtol(job_to_fg_str,NULL,10);
+            char *job_to_fg_str = strdup(((string_t *)to_be_passed->data)[1].data);
+            job_to_fg = strtol(job_to_fg_str, NULL, 10);
         }
-        fg(bg_job_list,job_to_fg);
+        fg(bg_job_list, job_to_fg);
+    }
+    else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "bg") == 0)
+    {
+        int job_to_bg = -1;
+        if (to_be_passed->size < 2)
+        {
+            if (bg_job_list->size > 0)
+            {
+                job_to_bg = bg_job_list->size - 1;
+            }
+        }
+        else
+        {
+            char *job_to_bg_str = strdup(((string_t *)to_be_passed->data)[1].data);
+            job_to_bg = strtol(job_to_bg_str, NULL, 10);
+        }
+        bg(bg_job_list, job_to_bg);
     }
     else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "log") != 0)
     {
@@ -91,6 +108,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
 {
     vector_t *token_list = tokenize_input(inp);
     vector_t *pids = malloc(sizeof(vector_t));
+    // vector_init_with_destructor(pids, sizeof(fg_job), 0, (vector_destructor_fn)fg_job_destructor);
     vector_init(pids, sizeof(fg_job), 0);
     vector_t *to_be_passed = malloc(sizeof(vector_t));
     vector_init_with_destructor(to_be_passed, sizeof(string_t), 0, (vector_destructor_fn)string_free);
@@ -154,7 +172,8 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         }
         else if (!strcmp(temp.data, "&"))
         {
-            int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size].job_number + 1) : 1;
+            // int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size].job_number + 1) : 1;
+            int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size - 1].job_number + 1) : 1;
             bg_job_no = new_job_no + 1;
             char cmd_name[4097] = {0};
             for (int i = 0; i < (int)to_be_passed->size; i++)
@@ -214,7 +233,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             // If it is hop, run directly as ow it wouldn't be visible in the prompt
             decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
         }
-        else if(strcmp(((string_t *)to_be_passed->data)[0].data, "fg") == 0)
+        else if (strcmp(((string_t *)to_be_passed->data)[0].data, "fg") == 0 || strcmp(((string_t *)to_be_passed->data)[0].data, "bg") == 0)
         {
             decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
         }
@@ -250,7 +269,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             {
                 strcat(current_fg_job->command_name, copy->command_name);
             }
-            vector_push_back(pids, &copy);
+            vector_push_back(pids, copy);
         }
     }
     // Restoring standard input output from terminal just to be sure

@@ -66,3 +66,27 @@ int fg(vector_t *bg_job_list, int job_number)
     }
     return 0;
 }
+int bg(vector_t* bg_job_list, int job_number)
+{
+    if (job_number > 0)
+    {
+        bg_job *to_be_brought = find_job_by_number(bg_job_list, job_number);
+        if (!to_be_brought)
+        {
+            printf("No such job\n");
+            return 0;
+        }
+        if (strcmp(to_be_brought->state, "Stopped") == 0)
+        {
+            printf("[%d] %s &\n",to_be_brought->job_number,to_be_brought->command_name);
+            kill(-(to_be_brought->pid), SIGCONT);
+            free(to_be_brought->state);
+            to_be_brought->state=strdup("Running");
+        }
+        else
+        {
+            printf("Job already running\n");
+        }
+    }
+    return 0;
+}

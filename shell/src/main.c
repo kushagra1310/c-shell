@@ -74,6 +74,8 @@ int main()
             if (result == 0)
             {
                 // still running
+                char *old_state = ((bg_job *)bg_job_list->data)[i].state;
+                free(old_state);
                 ((bg_job *)bg_job_list->data)[i].state = strdup("Running");
             }
             else if (result == -1)
@@ -83,6 +85,8 @@ int main()
             }
             else if (WIFSTOPPED(status))
             {
+                char *old_state = ((bg_job *)bg_job_list->data)[i].state;
+                free(old_state);
                 // The child process is currently stopped.
                 ((bg_job *)bg_job_list->data)[i].state = strdup("Stopped");
             }
@@ -93,7 +97,10 @@ int main()
                     printf("%s with pid %d exited normally\n", ((bg_job *)bg_job_list->data)[i].command_name, ((bg_job *)bg_job_list->data)[i].pid);
                 else
                     printf("%s with pid %d exited abnormally\n", ((bg_job *)bg_job_list->data)[i].command_name, ((bg_job *)bg_job_list->data)[i].pid);
+                // free(((bg_job *)bg_job_list->data)[i].command_name);
+                // free(((bg_job *)bg_job_list->data)[i].state);
                 vector_erase(bg_job_list, i, &((bg_job *)bg_job_list->data)[i]);
+                // printf("size: %ld\n",bg_job_list->size);
                 i--;
             }
             // LLM used

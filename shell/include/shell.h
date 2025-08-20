@@ -54,4 +54,7 @@ int ping_function(int pid, int sig_no);
 bg_job *find_job_by_number(vector_t *bg_job_list, int job_num);
 int find_job_by_number_num(vector_t *bg_job_list, int job_num);
 int fg(vector_t *bg_job_list, int job_number);
+int bg(vector_t* bg_job_list, int job_number);
+void fg_job_destructor(void *job_ptr);
+void bg_job_destructor(void *job_ptr);
 #endif
