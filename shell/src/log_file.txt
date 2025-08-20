@@ -1,15 +1,4 @@
-activities
-fg 1
-activities
-fg 1
-activities
-bg 2
-activities
-bg 1
-activities
-bg 1
-activities
-bg 1
-activities
-bg 1
-fg 1
+hop ..
+hop home
+hop shel
+hop shell

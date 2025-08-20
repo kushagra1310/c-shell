@@ -53,7 +53,7 @@ int fg(vector_t *bg_job_list, int job_number)
         current_fg_job = malloc(sizeof(fg_job));
         current_fg_job->pid = to_be_brought->pid;
         current_fg_job->command_name = strdup(to_be_brought->command_name);
-        vector_erase(bg_job_list, index, to_be_brought);
+        vector_erase(bg_job_list, index, NULL);
         printf("%s\n", current_fg_job->command_name);
         waitpid(to_be_brought->pid, &status, 0);
 

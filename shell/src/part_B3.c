@@ -113,7 +113,7 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
                     temp = ((string_t *)token_list->data)[2];
                     char *end;
                     long index = strtol(temp.data, &end, 10);
-                    if (*end != '\0' || index >= 15)
+                    if (*end != '\0' || index > 15 || index<1)
                     {
                         printf("Invalid log request\n");
                         return;

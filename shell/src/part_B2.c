@@ -30,9 +30,13 @@ void print_lexicographically(DIR *d)
     {
         printf("%s ", ((string_t *)file_list->data)[i].data);
     }
+    for (int i = 0; i < (int)file_list->size; i++)
+    {
+        string_free(&(((string_t *)file_list->data)[i]));
+    }
     printf("\n");
-    vector_free(file_list); 
-    free(file_list); 
+    vector_free(file_list);
+    free(file_list);
 }
 void print_lexicographically_l(DIR *d)
 {
@@ -52,8 +56,12 @@ void print_lexicographically_l(DIR *d)
     {
         printf("%s\n", ((string_t *)file_list->data)[i].data);
     }
-    vector_free(file_list); 
-    free(file_list); 
+    for (int i = 0; i < (int)file_list->size; i++)
+    {
+        string_free(&(((string_t *)file_list->data)[i]));
+    }
+    vector_free(file_list);
+    free(file_list);
 }
 void print_lexicographically_a(DIR *d)
 {
@@ -71,9 +79,13 @@ void print_lexicographically_a(DIR *d)
     {
         printf("%s ", ((string_t *)file_list->data)[i].data);
     }
+    for (int i = 0; i < (int)file_list->size; i++)
+    {
+        string_free(&(((string_t *)file_list->data)[i]));
+    }
     printf("\n");
-    vector_free(file_list); 
-    free(file_list); 
+    vector_free(file_list);
+    free(file_list);
 }
 void print_lexicographically_al(DIR *d)
 {
@@ -91,8 +103,12 @@ void print_lexicographically_al(DIR *d)
     {
         printf("%s\n", ((string_t *)file_list->data)[i].data);
     }
-    vector_free(file_list); 
-    free(file_list); 
+    for (int i = 0; i < (int)file_list->size; i++)
+    {
+        string_free(&(((string_t *)file_list->data)[i]));
+    }
+    vector_free(file_list);
+    free(file_list);
 }
 void check_and_print(DIR *d, int l_flag, int a_flag)
 {
@@ -117,7 +133,8 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
         d = opendir(cur_dir);
         if (d == NULL)
         {
-            perror("opendir failed");
+            // perror("opendir failed");
+            printf("No such directory!\n");
             return;
         }
         check_and_print(d, l_flag, a_flag);
@@ -131,7 +148,8 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
             d = opendir(prev_dir);
             if (d == NULL)
             {
-                perror("opendir failed");
+                // perror("opendir failed");
+                printf("No such directory!\n");
                 return;
             }
             check_and_print(d, l_flag, a_flag);
@@ -142,7 +160,8 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
             d = opendir(cur_dir);
             if (d == NULL)
             {
-                perror("opendir failed");
+                // perror("opendir failed");
+                printf("No such directory!\n");
                 return;
             }
             check_and_print(d, l_flag, a_flag);
@@ -153,7 +172,8 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
             d = opendir(home_dir);
             if (d == NULL)
             {
-                perror("opendir failed");
+                // perror("opendir failed");
+                printf("No such directory!\n");
                 return;
             }
             check_and_print(d, l_flag, a_flag);
@@ -173,7 +193,8 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
             d = opendir(parent);
             if (d == NULL)
             {
-                perror("opendir failed");
+                // perror("opendir failed");
+                printf("No such directory!\n");
                 return;
             }
             check_and_print(d, l_flag, a_flag);
@@ -198,15 +219,21 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
             }
             x_pointer++;
         }
-        else
+        else if (x_pointer == (int)token_list->size - 1)
         {
             d = opendir(temp.data);
             if (d == NULL)
             {
-                perror("opendir failed");
+                // perror("opendir failed");
+                printf("No such directory!\n");
                 return;
             }
             check_and_print(d, l_flag, a_flag);
+            break;
+        }
+        else
+        {
+            printf("Incorrect syntax for reveal!\n");
             break;
         }
     }

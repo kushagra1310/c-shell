@@ -5,12 +5,13 @@
 pid_t foreground_pgid = -1;
 fg_job *current_fg_job = NULL;
 int bg_job_no = 1; // to store the next job number index
+vector_t *bg_job_list;
 // LLM
 void sigint_handler(int signum)
 {
     if (foreground_pgid > 0)
     {
-        kill(-foreground_pgid, SIGINT);
+        kill(-foreground_pgid, SIGINT); // sending SIGINT to the entire foreground process group(job)
     }
 }
 // LLM
@@ -22,18 +23,19 @@ void sigtstp_handler(int signum)
         return; // No foreground job to stop
     }
 
-    // Send SIGTSTP to the entire process group
+    // sending SIGTSTP to the entire process group
     kill(-(current_fg_job->pid), SIGTSTP);
 
     bg_job *current_job = malloc(sizeof(bg_job));
     current_job->command_name = strdup(current_fg_job->command_name);
     current_job->job_number = bg_job_no;
+    bg_job_no+=1;
     current_job->pid = current_fg_job->pid;
     current_job->state = strdup("Stopped");
-
+    // to append the current foreground job to the background list
     // Print the message
     printf("\n[%d] Stopped   %s\n", bg_job_no, current_fg_job->command_name);
-
+    vector_push_back(bg_job_list, current_job);
     free(current_fg_job->command_name);
     free(current_fg_job);
     current_fg_job = NULL;
@@ -41,13 +43,16 @@ void sigtstp_handler(int signum)
 
 int main()
 {
+    bg_job_list = malloc(sizeof(vector_t));
     signal(SIGINT, sigint_handler);
     signal(SIGTSTP, sigtstp_handler);
-    char home_dir[] = "/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell";
+    char home_dir[4097];
+    getcwd(home_dir,sizeof(home_dir));
+    // "/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell"; hardcoded file path
     Queue *log_list = queue_create();
     char *prev_dir = malloc(4097 * sizeof(char));
     strcpy(prev_dir, home_dir);
-    vector_t *bg_job_list = malloc(sizeof(vector_t));
+    
     vector_init(bg_job_list, sizeof(bg_job), 0);
     while (1)
     {
@@ -81,6 +86,7 @@ int main()
             else if (result == -1)
             {
                 // error (maybe no such child anymore)
+                printf("%d\n",(((bg_job *)bg_job_list->data)[i].pid) );
                 perror("background process error");
             }
             else if (WIFSTOPPED(status))
@@ -99,7 +105,7 @@ int main()
                     printf("%s with pid %d exited abnormally\n", ((bg_job *)bg_job_list->data)[i].command_name, ((bg_job *)bg_job_list->data)[i].pid);
                 // free(((bg_job *)bg_job_list->data)[i].command_name);
                 // free(((bg_job *)bg_job_list->data)[i].state);
-                vector_erase(bg_job_list, i, &((bg_job *)bg_job_list->data)[i]);
+                vector_erase(bg_job_list, i, NULL);
                 // printf("size: %ld\n",bg_job_list->size);
                 i--;
             }

@@ -1,4 +1,3 @@
-// #define VECTOR_IMPLEMENTATION
 #define DYNSTRING_IMPLEMENTATION
 #include "../include/vectorlib.h"
 #include "../include/stringlib.h"
@@ -8,6 +7,11 @@
 vector_t *tokenize_input(char *inp)
 {
     vector_t *token_list = malloc(sizeof(vector_t));
+    if (token_list == NULL)
+    {
+        perror("malloc failed");
+        return NULL;
+    }
     vector_init_with_destructor(token_list, sizeof(string_t), 0, (vector_destructor_fn)string_free);
 
     string_t temp;
@@ -31,7 +35,7 @@ vector_t *tokenize_input(char *inp)
             string_t delimit;
             string_init(&delimit, "");
             string_append_char(&delimit, inp[i]);
-            if (inp[i] == '&' || inp[i] == '>')
+            if (inp[i] == '>')
             {
                 if (i + 1 < (int)strlen(inp) && inp[i + 1] == inp[i])
                     string_append_char(&delimit, inp[++i]);
@@ -53,7 +57,7 @@ vector_t *tokenize_input(char *inp)
 
 bool is_name(string_t token)
 {
-    if (strcmp(token.data, "|") == 0 || strcmp(token.data, "&") == 0 || strcmp(token.data, "&&") == 0 || strcmp(token.data, "<") == 0 || strcmp(token.data, ">") == 0 || strcmp(token.data, ">>") == 0 || strcmp(token.data, ";") == 0)
+    if (strcmp(token.data, "|") == 0 || strcmp(token.data, "&") == 0 || strcmp(token.data, "<") == 0 || strcmp(token.data, ">") == 0 || strcmp(token.data, ">>") == 0 || strcmp(token.data, ";") == 0)
         return false;
     return true;
 }
@@ -69,7 +73,7 @@ bool is_input(string_t token1, string_t token2)
 
 bool is_output(string_t token1, string_t token2)
 {
-    if (strcmp(token1.data, ">") != 0)
+    if (strcmp(token1.data, ">") != 0 && strcmp(token1.data, ">>") != 0)
         return false;
     if (is_name(token2))
         return true;
@@ -97,7 +101,7 @@ bool parse_atomic(vector_t *token_list, char *inp, int *x_pointer)
             string_t temp_2 = ((string_t *)(token_list->data))[*x_pointer + 1];
             if (is_input(temp, temp_2) || is_output(temp, temp_2))
             {
-                (*x_pointer)+=2;
+                (*x_pointer) += 2;
             }
             else
                 break;
@@ -122,7 +126,6 @@ bool parse_cmd_group(vector_t *token_list, char *inp, int *x_pointer)
         temp = ((string_t *)token_list->data)[*x_pointer];
         if (strcmp(temp.data, "|") != 0)
         {
-            // printf("debug here\n");
             return true;
         }
         else
@@ -135,8 +138,8 @@ bool parse_cmd_group(vector_t *token_list, char *inp, int *x_pointer)
 
 bool parse_shell_cmd(char *inp)
 {
-    vector_t *token_list = tokenize_input(inp);
-    int x_pointer = 0;
+    vector_t *token_list = tokenize_input(inp); // tokenizing input
+    int x_pointer = 0;                          // maintaining a central x_pointer as we move through the command
     if ((int)(token_list->size) - 1 - x_pointer < 0)
         return false;
     string_t temp = ((string_t *)token_list->data)[x_pointer];
@@ -147,14 +150,18 @@ bool parse_shell_cmd(char *inp)
     for (int i = x_pointer; i < (int)(token_list->size) && x_pointer < (int)(token_list->size) - 1; i++)
     {
         temp = ((string_t *)token_list->data)[x_pointer];
-        if (strcmp(temp.data, ";") != 0 && strcmp(temp.data, "&") != 0 && strcmp(temp.data, "&&") != 0)
+        if (strcmp(temp.data, ";") != 0 && strcmp(temp.data, "&") != 0)
             return false;
         else
             (x_pointer)++;
         if (strcmp(temp.data, "&") == 0 && x_pointer == (int)(token_list->size))
             break;
         if (!parse_cmd_group(token_list, inp, &x_pointer))
+        {
+            vector_free(token_list);
+            free(token_list);
             return false;
+        }
     }
     vector_free(token_list);
     free(token_list);
