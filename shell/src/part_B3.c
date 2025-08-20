@@ -113,7 +113,7 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
                     temp = ((string_t *)token_list->data)[2];
                     char *end;
                     long index = strtol(temp.data, &end, 10);
-                    if (*end != '\0' || index > 15 || index<1)
+                    if (*end != '\0' || index > 15 || index < 1)
                     {
                         printf("Invalid log request\n");
                         return;
@@ -121,23 +121,27 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
                     else
                     {
                         FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
-                        int count = 0;
-                        char ch;
-                        while ((ch = getc(log_file)) != EOF && count < index)
+                        int total_lines = 0;
+                        char buff[LINE_MAX];
+                        while (fgets(buff, sizeof(buff), log_file))
                         {
-                            if (ch == '\n')
-                                count++;
+                            total_lines++;
                         }
-                        if (ch == EOF)
+                        rewind(log_file);
+                        char command_to_execute[LINE_MAX];
+                        for (int i = 0; i < total_lines-index+1; i++)
                         {
-                            printf("Invalid log request\n");
-                            return;
+                            if (fgets(command_to_execute, sizeof(command_to_execute), log_file) == NULL)
+                            {
+                                printf("Error reading log file\n");
+                                fclose(log_file);
+                                return;
+                            }
                         }
-                        fseek(log_file, -1, SEEK_CUR);
-                        char str[4097];
-                        fgets(str, 4097, log_file);
-                        execute_cmd(str, prev_dir, home_dir, log_list, bg_job_list, false);
                         fclose(log_file);
+                        command_to_execute[strcspn(command_to_execute, "\n")]='\0';
+                        // printf("executing: %s\n",command_to_execute);
+                        execute_cmd(command_to_execute, home_dir, prev_dir, log_list, bg_job_list, false);
                     }
                 }
             }
@@ -161,8 +165,8 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
             }
         }
     }
-    else
-    {
-        log_add(inp, log_list);
-    }
+    // else
+    // {
+    //     log_add(inp, log_list);
+    // }
 }

@@ -1,7 +1,7 @@
 
 
 CC = gcc
-CFLAGS = -std=c99 -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -Wall -Wextra -Werror -Wno-unused-parameter -fno-asm
+CFLAGS = -std=c99 -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -Wall -Wextra -Werror -Wno-unused-parameter -fno-asm -g
 SRC = $(wildcard src/*.c)
 OBJ = $(SRC:.c=.o)
 

@@ -1,4 +1,15 @@
+hop shell
+ls
+hop src
 hop ..
-hop home
-hop shel
+ls
+hop ..
+hop shell
+ls
+hop shell
+hop ..
+ls
+hop shell
+hop src
+hop ..
 hop shell

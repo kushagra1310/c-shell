@@ -77,6 +77,10 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
         }
         bg(bg_job_list, job_to_bg);
     }
+    else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "log") == 0)
+    {
+        log_function(to_be_passed, inp, prev_dir, home_dir, log_list, bg_job_list);
+    }
     else if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "log") != 0)
     {
         char **args = malloc(4096 * sizeof(char *));
@@ -94,14 +98,7 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
         execvp(args[0], args);
         perror("exec failed");
         return 1;
-        // for (int i = 0; i < args_count; i++)
-        // {
-        //     free(args[i]);
-        // }
-        // free(args);
     }
-    if (should_log)
-        log_function(to_be_passed, inp, prev_dir, home_dir, log_list, bg_job_list);
     return 0;
 }
 int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vector_t *bg_job_list, bool should_log)
@@ -109,6 +106,17 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     vector_t *token_list = tokenize_input(inp);
     vector_t *pids = malloc(sizeof(vector_t));
     // vector_init_with_destructor(pids, sizeof(fg_job), 0, (vector_destructor_fn)fg_job_destructor);
+    for (int i = 0; i < (int)token_list->size; i++)
+    {
+        if (!strcmp(((string_t *)token_list->data)[i].data, "log"))
+        {
+            should_log = false;
+            break;
+        }
+    }
+    if (should_log)
+        log_add(inp, log_list);
+
     vector_init(pids, sizeof(fg_job), 0);
     vector_t *to_be_passed = malloc(sizeof(vector_t));
     vector_init_with_destructor(to_be_passed, sizeof(string_t), 0, (vector_destructor_fn)string_free);
@@ -228,7 +236,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     }
     if (to_be_passed->size > 0)
     {
-        if (strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0)
+        if (strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0 || strcmp(((string_t *)to_be_passed->data)[0].data, "log") == 0)
         {
             // If it is hop, run directly as ow it wouldn't be visible in the prompt
             decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);

@@ -4,6 +4,7 @@
 Max size of username and system-name is 1024 bytes // used constants
 Things left to fix:
 check if root directory needs to be fixed for reveal
+fg concatenation bug
 storing the entire command etc
 error handling for some functions
 log command handling semicolon and stuff

@@ -29,7 +29,7 @@ void sigtstp_handler(int signum)
     bg_job *current_job = malloc(sizeof(bg_job));
     current_job->command_name = strdup(current_fg_job->command_name);
     current_job->job_number = bg_job_no;
-    bg_job_no+=1;
+    bg_job_no += 1;
     current_job->pid = current_fg_job->pid;
     current_job->state = strdup("Stopped");
     // to append the current foreground job to the background list
@@ -47,18 +47,18 @@ int main()
     signal(SIGINT, sigint_handler);
     signal(SIGTSTP, sigtstp_handler);
     char home_dir[4097];
-    getcwd(home_dir,sizeof(home_dir));
+    getcwd(home_dir, sizeof(home_dir));
     // "/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell"; hardcoded file path
     Queue *log_list = queue_create();
     char *prev_dir = malloc(4097 * sizeof(char));
     strcpy(prev_dir, home_dir);
-    
+
     vector_init(bg_job_list, sizeof(bg_job), 0);
     while (1)
     {
         display_prompt(home_dir);
         // int status;
-
+        // printf("home dir: %s\n",home_dir);
         char *inp = malloc(1025 * sizeof(char));
         if (get_command(inp))
         {
@@ -86,7 +86,7 @@ int main()
             else if (result == -1)
             {
                 // error (maybe no such child anymore)
-                printf("%d\n",(((bg_job *)bg_job_list->data)[i].pid) );
+                printf("%d\n", (((bg_job *)bg_job_list->data)[i].pid));
                 perror("background process error");
             }
             else if (WIFSTOPPED(status))
