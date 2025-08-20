@@ -1,9 +1,9 @@
+#include "../include/headerfiles.h"
 #include "../include/vectorlib.h"
 #include "../include/stringlib.h"
 #include "../include/queue.h"
-#include "../include/headerfiles.h"
 #include "../include/shell.h"
-
+#include <limits.h>
 extern pid_t foreground_pgid;
 extern int bg_job_no;
 extern fg_job *current_fg_job;
@@ -224,7 +224,38 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         {
             int pipe_fd[2];
             pipe(pipe_fd);
-            pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log, &current_pgid);
+            fg_job *pipe_job = NULL;
+            if (pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log, &current_pgid, &pipe_job) == 0)
+            {
+                //LLM
+                // Handle the job info returned from pipe_function
+                if (pipe_job)
+                {
+                    if (!current_fg_job)
+                    {
+                        current_fg_job = malloc(sizeof(fg_job));
+                        if (current_fg_job)
+                        {
+                            current_fg_job->pid = pipe_job->pid;
+                            current_fg_job->command_name = malloc(LINE_MAX * sizeof(char));
+                            if (current_fg_job->command_name)
+                            {
+                                strcpy(current_fg_job->command_name, pipe_job->command_name);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        size_t current_len = strlen(current_fg_job->command_name);
+                        size_t new_len = strlen(pipe_job->command_name);
+                        if (current_len + new_len < LINE_MAX - 1)
+                        {
+                            strcat(current_fg_job->command_name, pipe_job->command_name);
+                        }
+                    }
+                }
+            }
+            // LLM
         }
         else
         {
@@ -268,7 +299,8 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                 char *l = strdup(" ");
                 strcat(cmd_name, l);
             }
-            copy->command_name = strdup(cmd_name);
+            copy->command_name = malloc((LINE_MAX + 1) * sizeof(char));
+            strcpy(copy->command_name, cmd_name);
             if (!current_fg_job)
             {
                 current_fg_job = copy;
@@ -294,6 +326,12 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     {
         pid_t current_pid_ptr = ((fg_job *)pids->data)[i].pid;
         waitpid(current_pid_ptr, NULL, 0);
+    }
+    if (current_fg_job)
+    {
+        free(current_fg_job->command_name);
+        free(current_fg_job);
+        current_fg_job = NULL; // Important!
     }
     foreground_pgid = -1;
 

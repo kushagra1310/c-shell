@@ -48,7 +48,7 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
 void log_add(char *inp, Queue *log_list);
 int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vector_t* bg_job_list, bool should_log);
 int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list,vector_t *bg_job_list, bool should_log);
-int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int* pipe_fd, vector_t* pids, vector_t* bg_job_list, bool should_log, pid_t* pgid);
+int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int* pipe_fd, vector_t* pids, vector_t* bg_job_list, bool should_log, pid_t* pgid,fg_job **job_info);
 int activity_function(vector_t* bg_job_list);
 int ping_function(int pid, int sig_no);
 bg_job *find_job_by_number(vector_t *bg_job_list, int job_num);

@@ -58,7 +58,8 @@ int main()
     {
         display_prompt(home_dir);
         // int status;
-        // printf("home dir: %s\n",home_dir);
+        // if(current_fg_job)
+        // printf("fgjob : %s\n",current_fg_job->command_name);
         char *inp = malloc(1025 * sizeof(char));
         if (get_command(inp))
         {
