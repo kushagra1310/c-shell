@@ -58,10 +58,8 @@ int main()
             free(prev_dir);
             exit(0);
         }
-        // printf("size: %d\n", (int)bg_job_list->size);
         for (int i = 0; i < (int)bg_job_list->size; i++)
         {
-            // A temporary pointer to the current job to make code cleaner
             bg_job *job = &(((bg_job *)bg_job_list->data)[i]);
             int status;
 
@@ -70,36 +68,33 @@ int main()
 
             if (result == 0)
             {
-                // Result 0 means the process is still running.
-                // We do nothing and continue to the next background job.
+                // process is running
                 continue;
             }
             else if (result == -1)
             {
-                // An error occurred. This can happen if the process is already gone.
-                // It's safest to remove it from our list.
+                // error occoured so remove from list
                 perror("waitpid background error");
                 vector_erase(bg_job_list, i, NULL);
-                i--; // Decrement i because the list is now shorter.
+                i--; // because vector is shifted by one to the left
             }
             else if (WIFEXITED(status))
             {
-                // The process finished its task normally.
+                // finished its task normally.
                 fprintf(stderr, "\n%s with pid %d exited normally\n", job->command_name, job->pid);
                 vector_erase(bg_job_list, i, NULL);
-                i--; // Decrement i because the list is now shorter.
+                i--; 
             }
             else if (WIFSIGNALED(status))
             {
                 // The process was killed by a signal.
                 fprintf(stderr, "\n%s with pid %d was terminated by a signal\n", job->command_name, job->pid);
                 vector_erase(bg_job_list, i, NULL);
-                i--; // Decrement i because the list is now shorter.
+                i--;
             }
             else if (WIFSTOPPED(status))
             {
-                // The process was stopped (e.g., by a signal from 'ping').
-                // We just update its state. We don't remove it.
+                // process stopped
                 free(job->state);
                 job->state = strdup("Stopped");
             }

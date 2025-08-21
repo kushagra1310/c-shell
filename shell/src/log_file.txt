@@ -1,15 +1,15 @@
+activites
 activities
-sleep 5
-activities
-bg 1
-activities
-sleep 5
-activities
-bg 1
+ls
+sleep 4 | sleep 5
+acivities
 activities
 bg 1
 activities
-sleep 5
-activities
 bg 1
+bg 2
+activities
+ls
+ls | wc
+sleep 100 & sleep 4 &
 activities
