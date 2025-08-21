@@ -96,15 +96,6 @@ int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_
         return -1;
     }
     strcpy(copy->command_name, cmd_name);
-
-    // if (!current_fg_job)
-    // {
-    //     current_fg_job = copy;
-    // }
-    // else
-    // {
-    //     strcat(current_fg_job->command_name, copy->command_name);
-    // }
     *job_info = copy;
     vector_push_back(pids, copy);
     if (close(pipe_fd[1]) < 0) // Parent doesn't write to this pipe
@@ -124,7 +115,6 @@ int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_
         perror("close failed (pipe_fd[0])");
         return -1;
     }
-
     vector_clear(to_be_passed);
     return 0;
 }

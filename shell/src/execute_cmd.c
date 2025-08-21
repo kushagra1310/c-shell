@@ -50,7 +50,7 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
             // No job number provided, use the most recent one
             if (bg_job_list->size > 0)
             {
-                job_to_fg = bg_job_list->size - 1;
+                job_to_fg =(((bg_job *)bg_job_list->data)[bg_job_list->size - 1]).job_number;
             }
         }
         else
@@ -67,7 +67,7 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
         {
             if (bg_job_list->size > 0)
             {
-                job_to_bg = bg_job_list->size - 1;
+                job_to_bg = (((bg_job *)bg_job_list->data)[bg_job_list->size - 1]).job_number;
             }
         }
         else
@@ -135,9 +135,30 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             {
                 temp = ((string_t *)token_list->data)[x_pointer++];
                 if (file_input != -1)
+                {
                     close(file_input);
+                    dup2(terminal_input_copy, STDIN_FILENO);
+                }
                 file_input = open(temp.data, O_RDONLY);
-                dup2(file_input, STDIN_FILENO);
+                if (file_input == -1)
+                {
+                    file_input = -2; // as -1 is used for no redirection, using -2 for error
+                }
+                else
+                {
+                    if (dup2(file_input, STDIN_FILENO) == -1)
+                    {
+                        perror("dup2 failed for input");
+                        close(file_input);
+                        file_input = -2;
+                    }
+                    else
+                    {
+                        // closing current file just to be sure
+                        close(file_input);
+                        file_input = STDIN_FILENO; // current redirection thingy stored
+                    }
+                }
             }
         }
         else if (!strcmp(temp.data, ">"))
@@ -146,9 +167,25 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             {
                 temp = ((string_t *)token_list->data)[x_pointer++];
                 if (file_output != -1)
+                {
                     close(file_output);
+                    dup2(terminal_output_copy, STDOUT_FILENO);
+                }
                 file_output = open(temp.data, O_WRONLY | O_CREAT, 0666);
-                dup2(file_output, STDOUT_FILENO);
+                if (file_output == -1)
+                {
+                    perror("open failed for output");
+                    continue;
+                }
+                if (dup2(file_output, STDOUT_FILENO) == -1)
+                {
+                    perror("dup2 failed for output");
+                    close(file_output);
+                    file_output = -1;
+                    continue;
+                }
+                close(file_output);
+                file_output = STDOUT_FILENO;
             }
         }
         else if (!strcmp(temp.data, ">>"))
@@ -156,12 +193,32 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             if (x_pointer < (int)token_list->size)
             {
                 temp = ((string_t *)token_list->data)[x_pointer++];
+                if (file_output != -1)
+                {
+                    close(file_output);
+                    dup2(terminal_output_copy, STDOUT_FILENO);
+                }
                 file_output = open(temp.data, O_WRONLY | O_APPEND | O_CREAT, 0666);
-                dup2(file_output, STDOUT_FILENO);
+
+                if (dup2(file_output, STDOUT_FILENO) == -1)
+                {
+                    perror("dup2 failed for append");
+                    close(file_output);
+                    file_output = -1;
+                    continue;
+                }
+
+                close(file_output);
+                file_output = STDOUT_FILENO;
             }
         }
         else if (!strcmp(temp.data, ";"))
         {
+            if (file_input == -2)
+            {
+                printf("No such file or directory\n");
+                vector_clear(to_be_passed);
+            }
             if (strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0)
             {
                 // If it is hop, run directly as ow it wouldn't be visible in the prompt
@@ -186,7 +243,11 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         }
         else if (!strcmp(temp.data, "&"))
         {
-            // int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size].job_number + 1) : 1;
+            if (file_input == -2)
+            {
+                printf("No such file or directory\n");
+                vector_clear(to_be_passed);
+            }
             int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size - 1].job_number + 1) : 1;
             bg_job_no = new_job_no + 1;
             char cmd_name[4097] = {0};
@@ -239,7 +300,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             if (pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log, &current_pgid, &pipe_job) == 0)
             {
                 // LLM
-                //  Handle the job info returned from pipe_function
+                // Handle the job info returned from pipe_function
                 if (pipe_job)
                 {
                     if (!current_fg_job)
@@ -265,6 +326,11 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                         }
                     }
                 }
+                // if(dup2(terminal_input_copy,STDIN_FILENO)<0 || dup2(terminal_output_copy,STDOUT_FILENO)<0)
+                // {
+                //     perror("dup2 failed");
+                //     continue;
+                // }
             }
             // LLM
         }
@@ -278,6 +344,11 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     }
     if (to_be_passed->size > 0)
     {
+        if (file_input == -2)
+        {
+            printf("No such file or directory\n");
+            vector_clear(to_be_passed);
+        }
         if (strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0 || strcmp(((string_t *)to_be_passed->data)[0].data, "log") == 0)
         {
             // If it is hop, run directly as ow it wouldn't be visible in the prompt
@@ -358,15 +429,15 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             fflush(stdout);
 
             bg_job stopped_job;
-            stopped_job.pid = child_pid; 
+            stopped_job.pid = child_pid;
             stopped_job.job_number = bg_job_no;
             stopped_job.command_name = strdup(current_fg_job->command_name);
             stopped_job.state = strdup("Stopped");
             vector_push_back(bg_job_list, &stopped_job);
             bg_job_no++;
-            
+
             // The whole job is stopped, so break the wait loop.
-            break; 
+            break;
         }
     }
 

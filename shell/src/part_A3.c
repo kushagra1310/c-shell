@@ -107,7 +107,11 @@ bool parse_atomic(vector_t *token_list, char *inp, int *x_pointer)
                 break;
         }
         else
+        {
+            if (strcmp(temp.data, "<") == 0 || strcmp(temp.data, ">") == 0 || strcmp(temp.data, ">>") == 0)
+                return false;
             break;
+        }
     }
     return true;
 }

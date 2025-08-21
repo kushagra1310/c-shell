@@ -16,4 +16,8 @@ check when the background execution message has to be displayed
 only bg ones handled in e1
 confirm exact requirements of ctrl c, ctrl d
 logout printing
+cat < input.txt > output.txt | ls
+cat < input.txt | grep "line" > output.txt
+echo "test" > file1.txt; cat file1.txt; rm file1.txt
+check when to print bg job is completed
 <!-- log file spacing issue -->

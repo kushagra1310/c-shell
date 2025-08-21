@@ -123,6 +123,7 @@ void check_and_print(DIR *d, int l_flag, int a_flag)
 }
 void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
 {
+    // printf("I'm here\n");
     int x_pointer = 1;
     char cur_dir[4097];
     getcwd(cur_dir, sizeof(cur_dir));
@@ -218,6 +219,16 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
                 a_flag = 1;
             }
             x_pointer++;
+            if (x_pointer == (int)token_list->size)
+            {
+                d = opendir(home_dir);
+                if (d == NULL)
+                {
+                    printf("No such directory!\n");
+                    return;
+                }
+                check_and_print(d, l_flag, a_flag);
+            }
         }
         else if (x_pointer == (int)token_list->size - 1)
         {

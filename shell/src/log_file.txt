@@ -1,15 +1,15 @@
-activites
-activities
-ls
-sleep 4 | sleep 5
-acivities
-activities
+ping 67094
+ping 67094 9
+ping 67094 41
+ping 99999 9
+sleep 10
+sleep 30
 bg 1
-activities
-bg 1
-bg 2
-activities
-ls
-ls | wc
-sleep 100 & sleep 4 &
-activities
+fg 1
+sleep 20 &
+fg
+fg 1
+sleep 20 &
+fg
+fg 999
+bg 999

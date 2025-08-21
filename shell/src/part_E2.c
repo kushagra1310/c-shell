@@ -9,7 +9,7 @@ int ping_function(int pid, int sig_no)
     sig_no%=32;
     if(kill((pid_t)pid,sig_no)==-1)
     {
-        if(errno == ESRCH)
+        if(errno == ESRCH) // no process found error code
         printf("No such process found\n");
         return 1;
     }

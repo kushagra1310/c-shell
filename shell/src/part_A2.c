@@ -4,7 +4,7 @@ int get_command(char *buf)
 {
     if (!fgets(buf, LINE_MAX, stdin))
     {
-        if (feof(stdin))
+        if (feof(stdin)) // end of file indicator check
         {
             // ctrl-d pressed so don't print error
             return 1;
