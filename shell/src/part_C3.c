@@ -7,7 +7,7 @@
 // just asked co pilot to add error checks for sys calls
 extern fg_job *current_fg_job;
 
-int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int *pipe_fd, vector_t *pids, vector_t *bg_job_list, bool should_log, pid_t *pgid,fg_job **job_info)
+int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, int *pipe_fd, vector_t *pids, vector_t *bg_job_list, bool should_log, pid_t *pgid, fg_job **job_info, int file_input, int file_output)
 {
     int rc = fork();
     if (rc < 0)
@@ -42,7 +42,19 @@ int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_
             perror("close failed (pipe_fd[1])");
             exit(1);
         }
-
+        if (file_input != -1 && file_input != -2 && dup2(file_input, STDIN_FILENO) == -1)
+        {
+            perror("dup2 failed for input");
+            close(file_input);
+            file_input = -2;
+        }
+        if (file_output != -1 && file_output != -2 && dup2(file_output, STDOUT_FILENO) == -1)
+        {
+            perror("dup2 failed for output");
+            close(file_output);
+            file_output = -1;
+            // continue;
+        }
         // Execute the command
         if (decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log) < 0)
         {
@@ -104,17 +116,17 @@ int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_
         return -1;
     }
 
-    if (dup2(pipe_fd[0], STDIN_FILENO) < 0) // Redirect parent's input from the pipe
-    {
-        perror("dup2 failed (pipe_fd[0] to STDIN)");
-        return -1;
-    }
+    // if (dup2(pipe_fd[0], STDIN_FILENO) < 0) // Redirect parent's input from the pipe
+    // {
+    //     perror("dup2 failed (pipe_fd[0] to STDIN)");
+    //     return -1;
+    // }
 
-    if (close(pipe_fd[0]) < 0)
-    {
-        perror("close failed (pipe_fd[0])");
-        return -1;
-    }
+    // if (close(pipe_fd[0]) < 0)
+    // {
+    //     perror("close failed (pipe_fd[0])");
+    //     return -1;
+    // }
     vector_clear(to_be_passed);
     return 0;
 }

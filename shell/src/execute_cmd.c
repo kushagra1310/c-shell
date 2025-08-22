@@ -8,6 +8,8 @@ extern pid_t foreground_pgid;
 extern int bg_job_no;
 extern fg_job *current_fg_job;
 extern pid_t shell_pgid;
+extern int terminal_output_copy;
+extern int terminal_input_copy;
 int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_dir, Queue *log_list, vector_t *bg_job_list, bool should_log)
 {
     if ((int)to_be_passed->size > 0 && strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0)
@@ -50,7 +52,7 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
             // No job number provided, use the most recent one
             if (bg_job_list->size > 0)
             {
-                job_to_fg =(((bg_job *)bg_job_list->data)[bg_job_list->size - 1]).job_number;
+                job_to_fg = (((bg_job *)bg_job_list->data)[bg_job_list->size - 1]).job_number;
             }
         }
         else
@@ -121,8 +123,6 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     vector_t *to_be_passed = malloc(sizeof(vector_t));
     vector_init_with_destructor(to_be_passed, sizeof(string_t), 0, (vector_destructor_fn)string_free);
     int x_pointer = 0;
-    int terminal_output_copy = dup(STDOUT_FILENO);
-    int terminal_input_copy = dup(STDIN_FILENO);
     int file_input = -1, file_output = -1;
     pid_t current_pgid = 0; // local pgid
 
@@ -144,21 +144,15 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                 {
                     file_input = -2; // as -1 is used for no redirection, using -2 for error
                 }
-                else
-                {
-                    if (dup2(file_input, STDIN_FILENO) == -1)
-                    {
-                        perror("dup2 failed for input");
-                        close(file_input);
-                        file_input = -2;
-                    }
-                    else
-                    {
-                        // closing current file just to be sure
-                        close(file_input);
-                        file_input = STDIN_FILENO; // current redirection thingy stored
-                    }
-                }
+                // else
+                // {
+                //     if (dup2(file_input, STDIN_FILENO) == -1)
+                //     {
+                //         perror("dup2 failed for input");
+                //         close(file_input);
+                //         file_input = -2;
+                //     }
+                // }
             }
         }
         else if (!strcmp(temp.data, ">"))
@@ -171,21 +165,19 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     close(file_output);
                     dup2(terminal_output_copy, STDOUT_FILENO);
                 }
-                file_output = open(temp.data, O_WRONLY | O_CREAT, 0666);
+                file_output = open(temp.data, O_TRUNC | O_WRONLY | O_CREAT, 0666);
                 if (file_output == -1)
                 {
                     perror("open failed for output");
                     continue;
                 }
-                if (dup2(file_output, STDOUT_FILENO) == -1)
-                {
-                    perror("dup2 failed for output");
-                    close(file_output);
-                    file_output = -1;
-                    continue;
-                }
-                close(file_output);
-                file_output = STDOUT_FILENO;
+                // if (dup2(file_output, STDOUT_FILENO) == -1)
+                // {
+                //     perror("dup2 failed for output");
+                //     close(file_output);
+                //     file_output = -1;
+                //     continue;
+                // }
             }
         }
         else if (!strcmp(temp.data, ">>"))
@@ -207,9 +199,6 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     file_output = -1;
                     continue;
                 }
-
-                close(file_output);
-                file_output = STDOUT_FILENO;
             }
         }
         else if (!strcmp(temp.data, ";"))
@@ -233,11 +222,27 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     signal(SIGTSTP, SIG_DFL);
                     signal(SIGTTIN, SIG_DFL);
                     signal(SIGTTOU, SIG_DFL);
-
+                    if (file_input != -1 && file_input != -2 && dup2(file_input, STDIN_FILENO) == -1)
+                    {
+                        perror("dup2 failed for input");
+                        close(file_input);
+                        file_input = -2;
+                    }
+                    if (file_output != -1 && file_output != -2 && dup2(file_output, STDOUT_FILENO) == -1)
+                    {
+                        perror("dup2 failed for output");
+                        close(file_output);
+                        file_output = -1;
+                        // continue;
+                    }
                     decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
                     exit(0);
                 }
+                file_input = -1;
+                file_output = -1;
                 waitpid(rc, NULL, 0);
+                dup2(terminal_input_copy, STDIN_FILENO);
+                dup2(terminal_output_copy, STDOUT_FILENO);
             }
             vector_clear(to_be_passed);
         }
@@ -273,6 +278,13 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     dup2(dev_null_fd, STDIN_FILENO); // point stdin to /dev/null to avoid terminal access for input
                     close(dev_null_fd);
                 }
+                if (file_output != -1 && file_output != -2 && dup2(file_output, STDOUT_FILENO) == -1)
+                {
+                    perror("dup2 failed for output");
+                    close(file_output);
+                    file_output = -1;
+                    // continue;
+                }
                 // LLM used
                 if (!decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log))
                 {
@@ -283,6 +295,8 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     exit(1);
                 }
             }
+            file_output = -1;
+            file_input = -1;
             bg_job *current_job = malloc(sizeof(bg_job));
             current_job->command_name = strdup(cmd_name);
             current_job->job_number = new_job_no;
@@ -297,7 +311,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             int pipe_fd[2];
             pipe(pipe_fd);
             fg_job *pipe_job = NULL;
-            if (pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log, &current_pgid, &pipe_job) == 0)
+            if (pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log, &current_pgid, &pipe_job, file_input, file_output) == 0)
             {
                 // LLM
                 // Handle the job info returned from pipe_function
@@ -326,11 +340,31 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                         }
                     }
                 }
-                // if(dup2(terminal_input_copy,STDIN_FILENO)<0 || dup2(terminal_output_copy,STDOUT_FILENO)<0)
+                if (file_input != -1 && file_input != -2)
+                {
+                    close(file_input);
+                }
+                file_input = pipe_fd[0];
+                file_output = -1;
+                // if (file_input != -1 && file_input != STDIN_FILENO)
                 // {
-                //     perror("dup2 failed");
-                //     continue;
+                //     close(file_input);
+                //     dup2(terminal_input_copy,STDIN_FILENO);
                 // }
+                // file_input = -1;
+                // if (file_output != -1 && file_output != STDOUT_FILENO)
+                // {
+                //     close(file_output);
+                //     dup2(terminal_output_copy,STDOUT_FILENO);
+                //     // printf("I'm being redirected\n");
+                // }
+                // file_output = -1;
+            }
+            else
+            {
+                // If pipe_function failed, close both ends
+                close(pipe_fd[0]);
+                close(pipe_fd[1]);
             }
             // LLM
         }
@@ -369,9 +403,25 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                 signal(SIGTTOU, SIG_DFL);
 
                 setpgid(0, current_pgid);
+                // printf("I need to know where I am \n");
+                if (file_input != -1 && file_input != -2 && dup2(file_input, STDIN_FILENO) == -1)
+                {
+                    perror("dup2 failed for input");
+                    close(file_input);
+                    file_input = -2;
+                }
+                if (file_output != -1 && file_output != -2 && dup2(file_output, STDOUT_FILENO) == -1)
+                {
+                    perror("dup2 failed for output");
+                    close(file_output);
+                    file_output = -1;
+                    // continue;
+                }
                 decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
                 exit(0);
             }
+            file_input = -1;
+            file_output = -1;
             if (current_pgid == 0)
             {
                 current_pgid = rc;
@@ -399,11 +449,21 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             vector_push_back(pids, copy);
         }
     }
+
+    if (file_input != -1 && file_input != STDIN_FILENO)
+    {
+        close(file_input);
+    }
+    if (file_output != -1 && file_output != STDOUT_FILENO)
+    {
+        close(file_output);
+    }
+
     // Restoring standard input output from terminal just to be sure
     dup2(terminal_input_copy, STDIN_FILENO);
     dup2(terminal_output_copy, STDOUT_FILENO);
-    close(terminal_input_copy);
-    close(terminal_output_copy);
+    // close(terminal_input_copy);
+    // close(terminal_output_copy);
     if (pids->size > 0)
     {
         foreground_pgid = current_pgid;

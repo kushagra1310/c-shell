@@ -28,6 +28,7 @@ class ShellTester:
         shell_path = os.path.join(self.original_dir, 'shell.out')
 
         self.shell = spawn(shell_path, cwd=self.test_dir)
+        self.shell.logfile_read = open('debug.log', 'wb')
         self.proc = Process(pid=self.shell.pid)
 
         os.chdir(self.test_dir)
@@ -48,7 +49,8 @@ class ShellTester:
     
     def _assert_prompt(self):
         sleep(0.001) # needed due to weird race condition in TestPartB.test_part1
-        prompt = f"<{getuser()}@{gethostname()}:{self.get_cwd().replace(str(self.test_dir),'~')}> "
+        prompt = f"<{getuser()}@{gethostname()}:{self.get_cwd().replace(str(self.test_dir),'~')}>"
+        print("expected", prompt)
         self.shell.expect_exact(prompt, timeout=TIMEOUT)
     
     def _sort_listing(self, listing: list[str]):

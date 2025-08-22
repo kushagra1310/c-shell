@@ -5,6 +5,7 @@
 #include "../include/shell.h"
 #include "../include/headerfiles.h"
 #include <dirent.h>
+#include <strings.h>
 
 int string_comparator(const void *a, const void *b)
 {

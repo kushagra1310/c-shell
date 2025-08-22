@@ -7,6 +7,8 @@ fg_job *current_fg_job = NULL;
 int bg_job_no = 1; // to store the next job number index
 vector_t *bg_job_list;
 pid_t shell_pgid;
+int terminal_output_copy;
+int terminal_input_copy;
 // LLM
 void sigint_handler(int signum)
 {
@@ -25,6 +27,8 @@ void sigtstp_handler(int signum)
 
 int main()
 {
+    terminal_output_copy = dup(STDOUT_FILENO);
+    terminal_input_copy = dup(STDIN_FILENO);
     shell_pgid = getpgrp();
     signal(SIGTTIN, SIG_IGN);
     signal(SIGTTOU, SIG_IGN);
@@ -83,7 +87,7 @@ int main()
                 // finished its task normally.
                 fprintf(stderr, "\n%s with pid %d exited normally\n", job->command_name, job->pid);
                 vector_erase(bg_job_list, i, NULL);
-                i--; 
+                i--;
             }
             else if (WIFSIGNALED(status))
             {
@@ -101,7 +105,7 @@ int main()
         }
         // LLM used
         if (!parse_shell_cmd(inp))
-            printf("Invalid Syntax!");
+            printf("Invalid Syntax!\n");
         else
         {
             execute_cmd(inp, home_dir, prev_dir, log_list, bg_job_list, true);
