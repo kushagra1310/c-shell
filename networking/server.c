@@ -5,8 +5,102 @@
 #include <string.h>
 #include <unistd.h>
 #include "sham.h"
+
 int port = 8080;
 int backlog_size = 10;
+int initial_seq_num = 6969;
+
+int sham_client_connect(int server_socket, struct sockaddr_in *client_addr_in)
+{
+    socklen_t client_addr_len = sizeof(*client_addr_in);
+
+    sham_header server_to_client_handshake;
+    int n = recvfrom(server_socket, &server_to_client_handshake, sizeof(server_to_client_handshake), 0, (struct sockaddr *)client_addr_in, &client_addr_len);
+    if (n < 0)
+    {
+        perror("recvfrom failed");
+        return 1;
+    }
+    if (!(server_to_client_handshake.flags & SYN))
+        return 1;
+
+    printf("Message received %d\n", server_to_client_handshake.seq_num);
+
+    server_to_client_handshake.ack_num = server_to_client_handshake.seq_num + 1;
+    server_to_client_handshake.seq_num = initial_seq_num;
+    server_to_client_handshake.flags |= ACK;
+
+    if (sendto(server_socket, &server_to_client_handshake, sizeof(server_to_client_handshake), 0, (struct sockaddr *)client_addr_in, sizeof(*client_addr_in)) < 0)
+    {
+        perror("server ACK sendto failed");
+        return 1;
+    }
+
+    if (recvfrom(server_socket, &server_to_client_handshake, sizeof(server_to_client_handshake), 0, (struct sockaddr *)client_addr_in, &client_addr_len) < 0)
+    {
+        perror("server ACK recvfrom failed");
+        return 1;
+    }
+
+    if (!(server_to_client_handshake.flags & ACK))
+        return 1;
+
+    if (n > 0)
+        printf("recevied acknowledgement\n");
+
+    return 0;
+}
+// LLM
+int sham_end(int socketfd, struct sockaddr_in *addr_in)
+{
+   socklen_t addr_len = sizeof(*addr_in);
+   
+   sham_header fin_handshake;
+   
+   // Step 1: Send FIN packet
+   fin_handshake.flags = FIN;
+   fin_handshake.seq_num = initial_seq_num;
+   int n = sendto(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr*)addr_in, sizeof(*addr_in));
+   if(n < 0)
+   {
+       perror("sendto FIN failed");
+       return -1;
+   }
+   printf("FIN sent\n");
+   
+   // Step 2: Receive ACK
+   n = recvfrom(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr*)addr_in, &addr_len);
+   if(n < 0)
+   {
+       perror("recvfrom ACK failed");
+       return -1;
+   }
+   printf("ACK received\n");
+   
+   // Step 3: Receive FIN
+   n = recvfrom(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr*)addr_in, &addr_len);
+   if(n < 0)
+   {
+       perror("recvfrom FIN failed");
+       return -1;
+   }
+   printf("FIN received\n");
+   
+   // Step 4: Send final ACK
+   fin_handshake.flags = ACK;
+   fin_handshake.ack_num = fin_handshake.seq_num + 1;
+   n = sendto(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr*)addr_in, sizeof(*addr_in));
+   if(n < 0)
+   {
+       perror("sendto final ACK failed");
+       return -1;
+   }
+   printf("Final ACK sent - connection terminated\n");
+   
+   return 0;
+}
+// LLM
+
 int main()
 {
     int server_socket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -16,11 +110,9 @@ int main()
         perror("socket formation failed");
         exit(1);
     }
-    struct sockaddr_in client_addr_in;                  // for client address
-    socklen_t client_addr_len = sizeof(client_addr_in);
-
-    
+    struct sockaddr_in client_addr_in; // for client address
     struct sockaddr_in server_addr_in;
+
     memset(&server_addr_in, 0, sizeof(server_addr_in)); // clearing the struct so that no garbage values
     server_addr_in.sin_family = AF_INET;
     server_addr_in.sin_port = htons(port);              // port number after convert byte order of host to network little endian to big endian etc
@@ -31,9 +123,9 @@ int main()
         perror("bind failed");
         exit(1);
     }
-    sham_header server_to_client_handshake;
-    int n = recvfrom(server_socket, &server_to_client_handshake, sizeof(server_to_client_handshake), 0, (struct sockaddr *)&client_addr_in, &client_addr_len);
-    printf("Message received %d\n",server_to_client_handshake.seq_num);
+
+    sham_client_connect(server_socket, &client_addr_in);
+
     close(server_socket);
     return 0;
 }

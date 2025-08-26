@@ -13,3 +13,4 @@ typedef struct
     uint16_t flags; // Control flags (SYN, ACK, FIN)
     uint16_t window_size; // Flow control window size
 } sham_header;
+int sham_end(int socketfd, struct sockaddr_in *addr_in);
