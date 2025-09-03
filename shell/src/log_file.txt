@@ -1,7 +1,3 @@
-hop ~
-hop ..
-hop -
-hop .. .. .. .. ~ /
 reveal -la
 reveal -lalalalaaaalal -lalala -al meow
 cat test.txt
@@ -13,3 +9,7 @@ echo Hi There! > test.txt; cat test.txt; echo Hi There! >> test.txt; cat test.tx
 sleep 10 & echo Hi There! > test.txt; cat test.txt
 cat < input.txt | grep "line" > output.txt
 echo "test" > file1.txt; cat file1.txt; rm file1.txt
+activities
+sleep 100 &
+bg 1
+fg 1

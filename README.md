@@ -13,4 +13,10 @@ only bg ones handled in e1
 confirm exact requirements of ctrl c, ctrl d
 logout printing
 check when to print bg job is completed
+log issue invalid syntax
+multiple redirection error msg as soon as encountered
 <!-- log file spacing issue -->
+### Part A2
+Things left to fix:
+windowsize variable
+window_size
