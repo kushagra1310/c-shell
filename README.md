@@ -20,3 +20,5 @@ multiple redirection error msg as soon as encountered
 Things left to fix:
 windowsize variable
 window_size
+termination handling
+buffer in client
