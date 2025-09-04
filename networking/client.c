@@ -64,6 +64,18 @@ int find_free_slot(sliding_window *window)
     return -1; // sliding window full
 }
 
+int are_there_unack(sliding_window *window)
+{
+    for (int i = 0; i < sliding_size; i++)
+    {
+        if (window[i].in_use)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int send_file(int socket, struct sockaddr_in *addr, char *filename)
 {
     // socklen_t addr_len = sizeof(*addr);
@@ -73,6 +85,7 @@ int send_file(int socket, struct sockaddr_in *addr, char *filename)
         perror("File open failed");
         return -1;
     }
+    char log_msg[100];
     char arr[1024];
     int read_bytes = 0;
     sliding_window sliding_window_arr[sliding_size];
@@ -83,34 +96,53 @@ int send_file(int socket, struct sockaddr_in *addr, char *filename)
 
     sham_header incoming_ack;
     socklen_t addr_len = sizeof(*addr);
-    while ((read_bytes = fread(arr, 1, 1024, file)) > 0)
+    int file_complete = 0;
+    while (!file_complete || are_there_unack(sliding_window_arr))
     {
-        sham_packet to_be_sent;
-        to_be_sent.header.seq_num = current_seq_num;
-        to_be_sent.header.flags = 0;
-        memcpy(to_be_sent.data, arr, read_bytes);
-        printf("Read bytes %d\n", read_bytes);
-        int slot = find_free_slot(sliding_window_arr);
-        char log_msg[100];
-        if (slot != -1)
+        // while (() > 0)
+        while (!file_complete)
         {
+            if (current_seq_num + read_bytes - ack_num >= window_size)
+            {
+                printf("Server Buffer full need to wait\n");
+                break;
+            }
+            int slot = find_free_slot(sliding_window_arr);
+            if (slot == -1)
+            {
+                printf("slots are full rn\n");
+                break;
+            }
+
+            read_bytes = fread(arr, 1, 1024, file);
+            if (!read_bytes)
+            {
+                file_complete = 1;
+                printf("File read\n");
+                break;
+            }
+
+            sham_packet to_be_sent;
+            to_be_sent.header.seq_num = current_seq_num;
+            to_be_sent.header.flags = 0;
+
+            memcpy(to_be_sent.data, arr, read_bytes);
+            sendto(socket, &to_be_sent, sizeof(sham_header) + read_bytes, 0, (struct sockaddr *)addr, sizeof(*addr)); // didn't use sizeof(sham_packet) directly cuz in that bytes read wouldn't get adjusted if less than 1024
+            // printf("Read bytes %d\n", read_bytes);
+
             sliding_window_arr[slot].packet.header.seq_num = current_seq_num;
             sliding_window_arr[slot].packet.header.flags = 0;
             sliding_window_arr[slot].actual_data_length = read_bytes;
-            memcpy(sliding_window_arr[slot].packet.data, to_be_sent.data, sizeof(sham_header) + read_bytes);
-            if (current_seq_num + read_bytes - ack_num <= window_size)
-            {
-                sendto(socket, &to_be_sent, sizeof(sham_header) + read_bytes, 0, (struct sockaddr *)addr, sizeof(*addr)); // didn't use sizeof(sham_packet) directly cuz in that bytes read wouldn't get adjusted if less than 1024
-                sliding_window_arr[slot].in_use = 1;
-                gettimeofday(&sliding_window_arr[slot].sent_time, NULL);
+            memcpy(sliding_window_arr[slot].packet.data, to_be_sent.data, read_bytes);
 
-                sprintf(log_msg, "SND DATA SEQ=%u LEN=%u", to_be_sent.header.seq_num, read_bytes);
-                log_event(log_msg, log_file);
-                current_seq_num += read_bytes;
-                // log_event
-            }
+            sliding_window_arr[slot].in_use = 1;
+            gettimeofday(&sliding_window_arr[slot].sent_time, NULL);
+
+            sprintf(log_msg, "SND DATA SEQ=%u LEN=%u", to_be_sent.header.seq_num, read_bytes);
+            log_event(log_msg, log_file);
+            current_seq_num += read_bytes;
+            // log_event
         }
-
         int recv_bytes = recvfrom(socket, &incoming_ack, sizeof(incoming_ack), MSG_DONTWAIT, (struct sockaddr *)addr, &addr_len);
 
         if (recv_bytes > 0 && (incoming_ack.flags & ACK))
@@ -120,27 +152,28 @@ int send_file(int socket, struct sockaddr_in *addr, char *filename)
 
             sprintf(log_msg, "FLOW WIN UPDATE=%u", window_size);
             log_event(log_msg, log_file);
-        }
-
-        sprintf(log_msg, "RCV ACK=%u", ack_num);
-        log_event(log_msg, log_file);
-
-        for (int i = 0; i < WINDOW_SIZE; i++)
-        {
-            if (sliding_window_arr[i].in_use)
+            
+            sprintf(log_msg, "RCV ACK=%u", ack_num);
+            log_event(log_msg, log_file);
+            
+            for (int i = 0; i < WINDOW_SIZE; i++)
             {
-                uint32_t packet_end = sliding_window_arr[i].packet.header.seq_num + sliding_window_arr[i].actual_data_length;
-                if (packet_end <= ack_num)
+                if (sliding_window_arr[i].in_use)
                 {
-                    sliding_window_arr[i].in_use = 0; // Free the slot
-                    printf("Packet SEQ=%u acknowledged\n", sliding_window_arr[i].packet.header.seq_num);
+                    uint32_t packet_end = sliding_window_arr[i].packet.header.seq_num + sliding_window_arr[i].actual_data_length;
+                    if (packet_end <= ack_num)
+                    {
+                        sliding_window_arr[i].in_use = 0; // Free the slot
+                        printf("Packet SEQ=%u acknowledged\n", sliding_window_arr[i].packet.header.seq_num);
+                    }
                 }
             }
         }
-
+            
         check_timeouts(socket, sliding_window_arr, addr, filename);
+        //  add delay if it hangs or doesn't receive
     }
-
+    sham_end(socket, addr);
     fclose(file);
     return 0;
 }
@@ -384,7 +417,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
                     }
                 }
                 // LLM
-                
+
                 if (data_len > 0)
                 {
                     incoming_packet.data[data_len] = '\0'; // ensuring string is null terminated

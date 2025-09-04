@@ -121,21 +121,25 @@ int sham_end(int socketfd, struct sockaddr_in *addr_in)
 #include <openssl/evp.h>
 #include <stdio.h>
 
-void print_md5sum(const char *filename) {
+void print_md5sum(const char *filename)
+{
     FILE *fp = fopen(filename, "rb");
-    if (!fp) {
+    if (!fp)
+    {
         perror("fopen");
         return;
     }
 
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
-    if (!mdctx) {
+    if (!mdctx)
+    {
         fprintf(stderr, "EVP_MD_CTX_new failed\n");
         fclose(fp);
         return;
     }
 
-    if (EVP_DigestInit_ex(mdctx, EVP_md5(), NULL) != 1) {
+    if (EVP_DigestInit_ex(mdctx, EVP_md5(), NULL) != 1)
+    {
         fprintf(stderr, "EVP_DigestInit_ex failed\n");
         EVP_MD_CTX_free(mdctx);
         fclose(fp);
@@ -144,8 +148,10 @@ void print_md5sum(const char *filename) {
 
     unsigned char buffer[4096];
     size_t bytes;
-    while ((bytes = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-        if (EVP_DigestUpdate(mdctx, buffer, bytes) != 1) {
+    while ((bytes = fread(buffer, 1, sizeof(buffer), fp)) > 0)
+    {
+        if (EVP_DigestUpdate(mdctx, buffer, bytes) != 1)
+        {
             fprintf(stderr, "EVP_DigestUpdate failed\n");
             EVP_MD_CTX_free(mdctx);
             fclose(fp);
@@ -155,7 +161,8 @@ void print_md5sum(const char *filename) {
 
     unsigned char md_value[EVP_MAX_MD_SIZE];
     unsigned int md_len;
-    if (EVP_DigestFinal_ex(mdctx, md_value, &md_len) != 1) {
+    if (EVP_DigestFinal_ex(mdctx, md_value, &md_len) != 1)
+    {
         fprintf(stderr, "EVP_DigestFinal_ex failed\n");
         EVP_MD_CTX_free(mdctx);
         fclose(fp);
@@ -167,15 +174,17 @@ void print_md5sum(const char *filename) {
 
     // Print in required format
     printf("MD5: ");
-    for (unsigned int i = 0; i < md_len; i++) {
+    for (unsigned int i = 0; i < md_len; i++)
+    {
         printf("%02x", md_value[i]);
     }
     printf("\n");
 }
 
-//LLM
+// LLM
 int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
 {
+    char log_msg[100];
     FILE *file = fopen(output_filename, "wb");
     socklen_t addr_len = sizeof(*addr);
 
@@ -188,9 +197,9 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
 
     // int expected_seq = expected_seq_num;
     int is_it_over = 0;
+    sham_packet packet;
     while (!is_it_over)
     {
-        sham_packet packet;
         int recv_bytes = recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)addr, &addr_len);
         if (recv_bytes <= 0)
             continue;
@@ -229,7 +238,6 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         }
         // LLM
 
-        char log_msg[100];
         sprintf(log_msg, "RCV DATA SEQ=%u LEN=%u", packet.header.seq_num, actual_size);
         log_event(log_msg, log_file);
 
@@ -307,7 +315,61 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         sprintf(log_msg, "SND ACK=%u WIN=%u", ack_packet.ack_num, ack_packet.window_size);
         log_event(log_msg, log_file);
     }
+    int recv_bytes = recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)addr, &addr_len);
 
+    if (recv_bytes > 0)
+    {
+        int data_len = recv_bytes - sizeof(sham_header);
+        // LLM
+        if (packet.header.flags & FIN)
+        {
+            // Step 1: Receive FIN
+            sprintf(log_msg, "RCV FIN SEQ=%u", packet.header.seq_num);
+            log_event(log_msg, log_file);
+
+            printf("Other side initiated disconnect. Beginning 4-way termination...\n");
+
+            // Step 2: Send ACK for their FIN
+            sham_header ack_response;
+            memset(&ack_response, 0, sizeof(ack_response));
+            ack_response.flags = ACK;
+            ack_response.ack_num = packet.header.seq_num + 1;
+
+            log_event("SND ACK FOR FIN", log_file);
+            sendto(socket, &ack_response, sizeof(ack_response), 0,
+                   (struct sockaddr *)addr, sizeof(*addr));
+
+            // ---- Simulate CLOSE-WAIT ----
+            // At this point, your application decides it's done and sends its own FIN.
+
+            sham_header fin_response;
+            memset(&fin_response, 0, sizeof(fin_response));
+            fin_response.flags = FIN;
+            fin_response.seq_num = current_seq_num++; // track your own SEQ numbers
+
+            sprintf(log_msg, "SND FIN SEQ=%u", fin_response.seq_num);
+            log_event(log_msg, log_file);
+
+            sendto(socket, &fin_response, sizeof(fin_response), 0,
+                   (struct sockaddr *)addr, sizeof(*addr));
+
+            // Step 4: Wait for their ACK to our FIN
+            sham_header incoming_ack;
+            socklen_t addr_len = sizeof(*addr);
+            int bytes = recvfrom(socket, &incoming_ack, sizeof(incoming_ack), 0,
+                                 (struct sockaddr *)addr, &addr_len);
+
+            if (bytes > 0 && (incoming_ack.flags & ACK) &&
+                incoming_ack.ack_num == fin_response.seq_num + 1)
+            {
+                sprintf(log_msg, "RCV ACK FOR FIN, ACK=%u", incoming_ack.ack_num);
+                log_event(log_msg, log_file);
+
+                printf("Connection closed cleanly.\n");
+                return -1; // signal termination complete
+            }
+        }
+    }
     fclose(file);
     return 0;
 }
