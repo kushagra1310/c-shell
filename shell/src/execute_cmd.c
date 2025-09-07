@@ -4,6 +4,7 @@
 #include "../include/queue.h"
 #include "../include/shell.h"
 #include <limits.h>
+#include <errno.h>
 extern pid_t foreground_pgid;
 extern int bg_job_no;
 extern fg_job *current_fg_job;
@@ -98,7 +99,11 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
         }
         args[args_count] = NULL;
         execvp(args[0], args);
-        perror("exec failed");
+        // perror("exec failed");
+        if(errno==ENOENT)
+        {
+            fprintf(stderr,"Command not found!\n");
+        }
         return 1;
     }
     return 0;
@@ -252,7 +257,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         {
             if (file_input == -2)
             {
-                printf("No such file or directory\n");
+                fprintf(stderr,"No such file or directory\n");
                 vector_clear(to_be_passed);
             }
             int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size - 1].job_number + 1) : 1;
@@ -311,7 +316,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             current_job->pid = rc;
             current_job->state = strdup("Running");
             vector_push_back(bg_job_list, current_job);
-            printf("[%d] %d\n", new_job_no, rc);
+            fprintf(stderr,"[%d] %d\n", new_job_no, rc);
             vector_clear(to_be_passed);
         }
         else if (!strcmp(temp.data, "|"))
