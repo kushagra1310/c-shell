@@ -133,6 +133,8 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         {
             if (x_pointer < (int)token_list->size)
             {
+                if(file_input==-2)
+                    break;
                 temp = ((string_t *)token_list->data)[x_pointer++];
                 if (file_input != -1)
                 {
@@ -266,7 +268,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             int rc = fork();
             if (!rc)
             {
-                // LLM used
+                // ############## LLM Generated Code Begins ##############
                 signal(SIGINT, SIG_DFL);
                 signal(SIGTSTP, SIG_DFL);
                 signal(SIGTTIN, SIG_DFL);
@@ -285,7 +287,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     file_output = -1;
                     // continue;
                 }
-                // LLM used
+                // ############## LLM Generated Code Ends ##############
                 if (!decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log))
                 {
                     exit(0);
@@ -467,6 +469,9 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     if (pids->size > 0)
     {
         foreground_pgid = current_pgid;
+
+        // printf("[DEBUG] New job starting. PGID is %d. Giving it terminal control.\n", foreground_pgid);
+
         tcsetpgrp(STDIN_FILENO, foreground_pgid);
     }
 
@@ -476,27 +481,30 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         int status;
         waitpid(child_pid, &status, WUNTRACED);
 
-        // Case 1: The process finished normally (like sleep 5) or was killed.
+        // the process finished normally or killed
         if (WIFEXITED(status) || WIFSIGNALED(status))
         {
             // This process is done. Continue the loop to wait for others.
             continue;
         }
-        // Case 2: The process was STOPPED by Ctrl-Z.
+        // the process was stopped by Ctrl-Z.
         else if (WIFSTOPPED(status))
         {
             printf("\n[%d] Stopped\t%s\n", bg_job_no, current_fg_job->command_name);
             fflush(stdout);
 
             bg_job stopped_job;
-            stopped_job.pid = child_pid;
+            stopped_job.pid = foreground_pgid;
             stopped_job.job_number = bg_job_no;
             stopped_job.command_name = strdup(current_fg_job->command_name);
             stopped_job.state = strdup("Stopped");
+
+            // printf("\n[DEBUG] Job STOPPED. Storing PGID %d for command '%s'.\n", foreground_pgid, current_fg_job->command_name);
+
             vector_push_back(bg_job_list, &stopped_job);
             bg_job_no++;
 
-            // The whole job is stopped, so break the wait loop.
+            // The whole job is stopped, so break the wait loop
             break;
         }
     }

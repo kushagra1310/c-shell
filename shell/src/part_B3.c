@@ -3,9 +3,11 @@
 #include "../include/stringlib.h"
 #include "../include/queue.h"
 #include "../include/shell.h"
+extern char* log_file_name;
 void log_add(char *inp, Queue *log_list)
 {
-    FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
+    // FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
+    FILE *log_file = fopen(log_file_name, "r");
     int line_count = 0;
     char last_line[4097] = "";
     if (log_file != NULL)
@@ -28,7 +30,8 @@ void log_add(char *inp, Queue *log_list)
     if (line_count < 15)
     {
         // appending
-        log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "a");
+        // log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "a");
+        log_file = fopen(log_file_name, "a");
         if (log_file == NULL)
         {
             perror("fopen failed");
@@ -39,8 +42,9 @@ void log_add(char *inp, Queue *log_list)
     }
     else
     {
-        // --- Case B: History is full, rewrite the file ---
-        log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
+        // history full
+        // log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
+        log_file = fopen(log_file_name, "r");
         if (log_file == NULL)
         {
             perror("fopen failed");
@@ -58,7 +62,8 @@ void log_add(char *inp, Queue *log_list)
             temp_lines[i++] = strdup(buffer);
         }
         fclose(log_file);
-        log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "w");
+        // log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "w");
+        log_file = fopen(log_file_name, "w");
         if (log_file == NULL)
         {
             perror("fopen failed");
@@ -101,7 +106,8 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
             temp = ((string_t *)token_list->data)[1];
             if (!strcmp(temp.data, "purge"))
             {
-                FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "w");
+                // FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "w");
+                FILE *log_file = fopen(log_file_name, "w");
                 fclose(log_file);
                 while (!queue_is_empty(log_list))
                     dequeue(log_list);
@@ -120,7 +126,8 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
                     }
                     else
                     {
-                        FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
+                        // FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
+                        FILE *log_file = fopen(log_file_name, "r");
                         int total_lines = 0;
                         char buff[LINE_MAX];
                         while (fgets(buff, sizeof(buff), log_file))
@@ -153,7 +160,8 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
         }
         else
         {
-            FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
+            // FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
+            FILE *log_file = fopen(log_file_name, "r");
             if (log_file)
             {
                 char buffer[4097];

@@ -16,7 +16,8 @@ int get_command(char *buf)
             return 1;
         }
     }
-    // LLM used
+    // ############## LLM Generated Code Begins ##############
     buf[strcspn(buf, "\n")] = '\0'; // replacing \n with \0, as fgets includes \n in it's string
+    // ############## LLM Generated Code Ends ##############
     return 0;
 }

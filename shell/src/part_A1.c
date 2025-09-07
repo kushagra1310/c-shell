@@ -131,7 +131,7 @@ void display_prompt(char* home_dir)
     systemname = get_systemname(terminal_output_copy);
     current_dir = get_current_dir(terminal_output_copy);
     display_tilde(current_dir,home_dir);
-    printf("<%s@%s:%s>", username, systemname, current_dir);
+    printf("<%s@%s:%s> ", username, systemname, current_dir);
 
     free(username);
     free(systemname);

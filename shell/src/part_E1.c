@@ -3,14 +3,14 @@
 #include "../include/stringlib.h"
 #include "../include/queue.h"
 #include "../include/shell.h"
-// LLM
+// ############## LLM Generated Code Begins ##############
 int bg_job_comparator(const void *a, const void *b)
 {
     const bg_job *job_a = (const bg_job *)a;
     const bg_job *job_b = (const bg_job *)b;
     return strcmp(job_a->command_name, job_b->command_name);
 }
-// LLM
+// ############## LLM Generated Code Ends ##############
 int activity_function(vector_t *bg_job_list)
 {   
     vector_t sorted_list;
