@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <openssl/evp.h>
 #include "sham.h"
+#include <openssl/evp.h>
+#include <stdio.h>
 
 long port;
 int backlog_size = 10;
@@ -17,6 +19,59 @@ FILE *log_file = NULL;
 int logging_enabled = 0;
 float loss_rate;
 int chat_mode;
+
+int sham_end_recieve(int socket, sham_packet incoming_packet, struct sockaddr_in *addr)
+{
+    // LLM
+    char log_msg[100];
+    // Step 1: Receive FIN
+    sprintf(log_msg, "RCV FIN SEQ=%u", incoming_packet.header.seq_num);
+    log_event(log_msg, log_file);
+
+    printf("Other side initiated disconnect. Beginning 4-way termination...\n");
+
+    // Step 2: Send ACK for their FIN
+    sham_header ack_response;
+    memset(&ack_response, 0, sizeof(ack_response));
+    ack_response.flags = ACK;
+    ack_response.ack_num = incoming_packet.header.seq_num + 1;
+
+    log_event("SND ACK FOR FIN", log_file);
+    sendto(socket, &ack_response, sizeof(ack_response), 0,
+           (struct sockaddr *)addr, sizeof(*addr));
+
+    // ---- Simulate CLOSE-WAIT ----
+    // At this point, your application decides it's done and sends its own FIN.
+
+    sham_header fin_response;
+    memset(&fin_response, 0, sizeof(fin_response));
+    fin_response.flags = FIN;
+    fin_response.seq_num = current_seq_num++; // track your own SEQ numbers
+
+    sprintf(log_msg, "SND FIN SEQ=%u", fin_response.seq_num);
+    log_event(log_msg, log_file);
+
+    sendto(socket, &fin_response, sizeof(fin_response), 0,
+           (struct sockaddr *)addr, sizeof(*addr));
+
+    // Step 4: Wait for their ACK to our FIN
+    sham_header incoming_ack;
+    socklen_t addr_len = sizeof(*addr);
+    int bytes = recvfrom(socket, &incoming_ack, sizeof(incoming_ack), 0,
+                         (struct sockaddr *)addr, &addr_len);
+
+    if (bytes > 0 && (incoming_ack.flags & ACK) &&
+        incoming_ack.ack_num == fin_response.seq_num + 1)
+    {
+        sprintf(log_msg, "RCV ACK FOR FIN, ACK=%u", incoming_ack.ack_num);
+        log_event(log_msg, log_file);
+
+        printf("Connection closed cleanly.\n");
+        return -1; // signal termination complete
+    }
+    return 0;
+    // LLM
+}
 
 int sham_client_connect(int server_socket, struct sockaddr_in *client_addr_in)
 {
@@ -118,8 +173,6 @@ int sham_end(int socketfd, struct sockaddr_in *addr_in)
 }
 // LLM
 // LLM
-#include <openssl/evp.h>
-#include <stdio.h>
 
 void print_md5sum(const char *filename)
 {
@@ -207,6 +260,13 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
 
         double random_value = (double)rand() / RAND_MAX;
 
+        // LLM
+        if (packet.header.flags & FIN)
+        {
+            if (sham_end_recieve(socket, packet, addr) == -1)
+                return 0;
+        }
+        // LLM
         if (random_value < loss_rate)
         {
             char log_msg[100];
@@ -215,28 +275,6 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
             continue;
         }
 
-        // LLM
-        if (packet.header.flags & FIN)
-        {
-            char log_msg[100];
-            sprintf(log_msg, "RCV FIN SEQ=%u", packet.header.seq_num);
-            log_event(log_msg, log_file);
-
-            // Send ACK for the FIN
-            sham_header ack_for_fin;
-            memset(&ack_for_fin, 0, sizeof(ack_for_fin));
-            ack_for_fin.flags = ACK;
-            ack_for_fin.ack_num = packet.header.seq_num + 1;
-            ack_for_fin.window_size = available_buffer_size;
-            sendto(socket, &ack_for_fin, sizeof(ack_for_fin), 0, (struct sockaddr *)addr, sizeof(*addr));
-
-            sprintf(log_msg, "SND ACK FOR FIN");
-            log_event(log_msg, log_file);
-
-            is_it_over = 1; // Signal to exit the file receiving loop
-            continue;       // Skip the rest of the data processing logic
-        }
-        // LLM
 
         sprintf(log_msg, "RCV DATA SEQ=%u LEN=%u", packet.header.seq_num, actual_size);
         log_event(log_msg, log_file);
@@ -246,10 +284,10 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         {
             fwrite(packet.data, 1, actual_size, file);
             printf("Actual size %d\n", actual_size);
-            if (actual_size < MAXPAYLOADSIZE)
-            {
-                is_it_over = 1;
-            }
+            // if (actual_size < MAXPAYLOADSIZE)
+            // {
+            //     is_it_over = 1;
+            // }
             expected_seq_num += actual_size;
 
             int check_again = 1;
@@ -269,8 +307,8 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
                         printf("Delivering buffered packet SEQ=%u\n", expected_seq_num);
 
                         fwrite(buffer[i].packet.data, 1, buffer[i].data_length, file);
-                        if (buffer[i].data_length < MAXPAYLOADSIZE)
-                            is_it_over = 1;
+                        // if (buffer[i].data_length < MAXPAYLOADSIZE)
+                        //     is_it_over = 1;
                         expected_seq_num += buffer[i].data_length;
 
                         // free the buffer slot
@@ -283,20 +321,33 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         }
         else if (packet.header.seq_num > expected_seq_num)
         {
-            // keep the packet in buffer
-            int i;
-            for (i = 0; i < WINDOW_SIZE; i++)
+            int already_buffered = 0;
+            for (int i = 0; i < WINDOW_SIZE; i++)
             {
-                if (!buffer[i].received)
+                if (buffer[i].received && buffer[i].packet.header.seq_num == packet.header.seq_num)
                 {
-                    memcpy(&buffer[i].packet, &packet, sizeof(sham_packet));
-                    buffer[i].data_length = actual_size;
-                    buffer[i].received = 1;
-                    printf("Buffered packet SEQ=%u in slot %d\n", packet.header.seq_num, i);
+                    already_buffered = 1;
+                    break;
                 }
             }
-            if (i == WINDOW_SIZE)
-                printf("Buffer full\n");
+            // keep the packet in buffer
+            if (!already_buffered)
+            {
+                int i;
+                for (i = 0; i < WINDOW_SIZE; i++)
+                {
+                    if (!buffer[i].received)
+                    {
+                        memcpy(&buffer[i].packet, &packet, sizeof(sham_packet));
+                        buffer[i].data_length = actual_size;
+                        buffer[i].received = 1;
+                        printf("Buffered packet SEQ=%u in slot %d\n", packet.header.seq_num, i);
+                        break;
+                    }
+                }
+                if (i == WINDOW_SIZE)
+                    printf("Buffer full\n");
+            }
         }
         else
         {
@@ -314,6 +365,7 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         sendto(socket, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)addr, sizeof(*addr));
         sprintf(log_msg, "SND ACK=%u WIN=%u", ack_packet.ack_num, ack_packet.window_size);
         log_event(log_msg, log_file);
+
     }
     int recv_bytes = recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)addr, &addr_len);
 
@@ -323,51 +375,8 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         // LLM
         if (packet.header.flags & FIN)
         {
-            // Step 1: Receive FIN
-            sprintf(log_msg, "RCV FIN SEQ=%u", packet.header.seq_num);
-            log_event(log_msg, log_file);
-
-            printf("Other side initiated disconnect. Beginning 4-way termination...\n");
-
-            // Step 2: Send ACK for their FIN
-            sham_header ack_response;
-            memset(&ack_response, 0, sizeof(ack_response));
-            ack_response.flags = ACK;
-            ack_response.ack_num = packet.header.seq_num + 1;
-
-            log_event("SND ACK FOR FIN", log_file);
-            sendto(socket, &ack_response, sizeof(ack_response), 0,
-                   (struct sockaddr *)addr, sizeof(*addr));
-
-            // ---- Simulate CLOSE-WAIT ----
-            // At this point, your application decides it's done and sends its own FIN.
-
-            sham_header fin_response;
-            memset(&fin_response, 0, sizeof(fin_response));
-            fin_response.flags = FIN;
-            fin_response.seq_num = current_seq_num++; // track your own SEQ numbers
-
-            sprintf(log_msg, "SND FIN SEQ=%u", fin_response.seq_num);
-            log_event(log_msg, log_file);
-
-            sendto(socket, &fin_response, sizeof(fin_response), 0,
-                   (struct sockaddr *)addr, sizeof(*addr));
-
-            // Step 4: Wait for their ACK to our FIN
-            sham_header incoming_ack;
-            socklen_t addr_len = sizeof(*addr);
-            int bytes = recvfrom(socket, &incoming_ack, sizeof(incoming_ack), 0,
-                                 (struct sockaddr *)addr, &addr_len);
-
-            if (bytes > 0 && (incoming_ack.flags & ACK) &&
-                incoming_ack.ack_num == fin_response.seq_num + 1)
-            {
-                sprintf(log_msg, "RCV ACK FOR FIN, ACK=%u", incoming_ack.ack_num);
-                log_event(log_msg, log_file);
-
-                printf("Connection closed cleanly.\n");
-                return -1; // signal termination complete
-            }
+            if (sham_end_recieve(socket, packet, addr) == -1)
+            return 0;
         }
     }
     fclose(file);
@@ -425,7 +434,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
                 sprintf(log_msg, "SND DATA SEQ=%u LEN=%zu", current_seq_num, msg_len);
                 log_event(log_msg, log_file);
             }
-            current_seq_num++;
+            current_seq_num += msg_len;
         }
         if (FD_ISSET(socket, &read_fds))
         {
@@ -436,57 +445,11 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
             if (recv_bytes > 0)
             {
                 int data_len = recv_bytes - sizeof(sham_header);
-                // LLM
                 if (incoming_packet.header.flags & FIN)
                 {
-                    // Step 1: Receive FIN
-                    sprintf(log_msg, "RCV FIN SEQ=%u", incoming_packet.header.seq_num);
-                    log_event(log_msg, log_file);
-
-                    printf("Other side initiated disconnect. Beginning 4-way termination...\n");
-
-                    // Step 2: Send ACK for their FIN
-                    sham_header ack_response;
-                    memset(&ack_response, 0, sizeof(ack_response));
-                    ack_response.flags = ACK;
-                    ack_response.ack_num = incoming_packet.header.seq_num + 1;
-
-                    log_event("SND ACK FOR FIN", log_file);
-                    sendto(socket, &ack_response, sizeof(ack_response), 0,
-                           (struct sockaddr *)addr, sizeof(*addr));
-
-                    // ---- Simulate CLOSE-WAIT ----
-                    // At this point, your application decides it's done and sends its own FIN.
-
-                    sham_header fin_response;
-                    memset(&fin_response, 0, sizeof(fin_response));
-                    fin_response.flags = FIN;
-                    fin_response.seq_num = current_seq_num++; // track your own SEQ numbers
-
-                    sprintf(log_msg, "SND FIN SEQ=%u", fin_response.seq_num);
-                    log_event(log_msg, log_file);
-
-                    sendto(socket, &fin_response, sizeof(fin_response), 0,
-                           (struct sockaddr *)addr, sizeof(*addr));
-
-                    // Step 4: Wait for their ACK to our FIN
-                    sham_header incoming_ack;
-                    socklen_t addr_len = sizeof(*addr);
-                    int bytes = recvfrom(socket, &incoming_ack, sizeof(incoming_ack), 0,
-                                         (struct sockaddr *)addr, &addr_len);
-
-                    if (bytes > 0 && (incoming_ack.flags & ACK) &&
-                        incoming_ack.ack_num == fin_response.seq_num + 1)
-                    {
-                        sprintf(log_msg, "RCV ACK FOR FIN, ACK=%u", incoming_ack.ack_num);
-                        log_event(log_msg, log_file);
-
-                        printf("Connection closed cleanly.\n");
-                        return -1; // signal termination complete
-                    }
+                    if (sham_end_recieve(socket, incoming_packet, addr) == -1)
+                    return 0;
                 }
-
-                // LLM
                 if (data_len > 0)
                 {
                     incoming_packet.data[data_len] = '\0'; // ensuring string is null terminated
