@@ -269,6 +269,9 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             if (!rc)
             {
                 // ############## LLM Generated Code Begins ##############
+
+                setpgid(0, 0);
+
                 signal(SIGINT, SIG_DFL);
                 signal(SIGTSTP, SIG_DFL);
                 signal(SIGTTIN, SIG_DFL);
@@ -297,6 +300,9 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     exit(1);
                 }
             }
+
+            setpgid(rc, rc);
+            
             file_output = -1;
             file_input = -1;
             bg_job *current_job = malloc(sizeof(bg_job));

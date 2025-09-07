@@ -78,7 +78,7 @@ int fg(vector_t *bg_job_list, int job_number)
             stopped_job.state = strdup("Stopped");
             vector_push_back(bg_job_list, &stopped_job);
         }
-        else
+        // else
         // printf("[DEBUG] Job TERMINATED.\n");
         if (current_fg_job != NULL)
         {
