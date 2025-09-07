@@ -76,7 +76,7 @@ int sham_end(int socketfd, struct sockaddr_in *addr_in)
 
     // Step 1: Send FIN packet
     fin_handshake.flags = FIN;
-    fin_handshake.seq_num = initial_seq_num;
+    fin_handshake.seq_num = current_seq_num;
     int n = sendto(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, sizeof(*addr_in));
     if (n < 0)
     {

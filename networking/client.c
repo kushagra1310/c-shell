@@ -249,7 +249,7 @@ int sham_end(int socketfd, struct sockaddr_in *addr_in)
 
     // Step 1: Send FIN packet
     fin_handshake.flags = FIN;
-    fin_handshake.seq_num = initial_seq_num;
+    fin_handshake.seq_num = current_seq_num;
 
     sprintf(log_msg, "SND FIN SEQ=%u", fin_handshake.seq_num);
     log_event(log_msg, log_file);
@@ -365,7 +365,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
             if (recv_bytes > 0)
             {
                 int data_len = recv_bytes - sizeof(sham_header);
-                // LLM
+                // ############## LLM Generated Code Begins ##############
                 if (incoming_packet.header.flags & FIN)
                 {
                     // Step 1: Peer wants to close
@@ -416,7 +416,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
                         return -1; // signal termination
                     }
                 }
-                // LLM
+                // ############## LLM Generated Code Ends ##############
 
                 if (data_len > 0)
                 {
