@@ -275,7 +275,6 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
             continue;
         }
 
-
         sprintf(log_msg, "RCV DATA SEQ=%u LEN=%u", packet.header.seq_num, actual_size);
         log_event(log_msg, log_file);
 
@@ -365,7 +364,6 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         sendto(socket, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)addr, sizeof(*addr));
         sprintf(log_msg, "SND ACK=%u WIN=%u", ack_packet.ack_num, ack_packet.window_size);
         log_event(log_msg, log_file);
-
     }
     int recv_bytes = recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)addr, &addr_len);
 
@@ -376,7 +374,7 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         if (packet.header.flags & FIN)
         {
             if (sham_end_recieve(socket, packet, addr) == -1)
-            return 0;
+                return 0;
         }
     }
     fclose(file);
@@ -389,16 +387,26 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
     char input_buffer[1024];
     char log_msg[100];
     socklen_t addr_len = sizeof(*addr);
+    sliding_window unacked_packet;
+    unacked_packet.in_use = 0;
 
     while (1)
     {
         FD_ZERO(&read_fds);
-        FD_SET(STDIN_FILENO, &read_fds);
-        max_fd = (max_fd > STDIN_FILENO) ? max_fd : STDIN_FILENO;
+        if (!unacked_packet.in_use)
+        {
+            FD_SET(STDIN_FILENO, &read_fds);
+            max_fd = (max_fd > STDIN_FILENO) ? max_fd : STDIN_FILENO;
+        } // not allowing to send more msgs until previous one is acknowledged for reliability
         FD_SET(socket, &read_fds);
         max_fd = (max_fd > socket) ? max_fd : socket;
 
-        int activity = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 200000; // check for retransmission every 200 ms
+        // unacked_packet.in_use = 0;
+
+        int activity = select(max_fd + 1, &read_fds, NULL, NULL, &timeout);
         if (FD_ISSET(STDIN_FILENO, &read_fds))
         {
             if (fgets(input_buffer, sizeof(input_buffer), stdin) == NULL)
@@ -416,6 +424,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
 
             if (strcmp(input_buffer, "/quit") == 0)
             {
+                sham_end(socket, addr);
                 return 0;
             }
 
@@ -428,13 +437,19 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
             strncpy(out_packet.data, input_buffer, msg_len);
             out_packet.data[msg_len] = '\0';
 
+            unacked_packet.packet = out_packet;
+            unacked_packet.actual_data_length = msg_len;
+            unacked_packet.in_use = 1;
+            gettimeofday(&unacked_packet.sent_time, NULL);
+            printf("Sending message...\n");
+
             int sent_bytes = sendto(socket, &out_packet, sizeof(sham_header) + msg_len, 0, (struct sockaddr *)addr, sizeof(*addr));
             if (sent_bytes >= 0)
             {
                 sprintf(log_msg, "SND DATA SEQ=%u LEN=%zu", current_seq_num, msg_len);
                 log_event(log_msg, log_file);
             }
-            current_seq_num += msg_len;
+            // current_seq_num += msg_len;
         }
         if (FD_ISSET(socket, &read_fds))
         {
@@ -445,10 +460,35 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
             if (recv_bytes > 0)
             {
                 int data_len = recv_bytes - sizeof(sham_header);
+
+                if (unacked_packet.in_use && data_len <= 0 && (incoming_packet.header.flags & ACK))
+                {
+                    uint32_t expected_ack_num = unacked_packet.packet.header.seq_num + unacked_packet.actual_data_length;
+
+                    if (incoming_packet.header.ack_num == expected_ack_num)
+                    {
+                        printf("Message delivered successfully!\n");
+                        sprintf(log_msg, "RCV ACK=%u", incoming_packet.header.ack_num);
+                        log_event(log_msg, log_file);
+
+                        // free the slot, ack received
+                        unacked_packet.in_use = 0;
+                        current_seq_num += unacked_packet.actual_data_length;
+                        continue;
+                    }
+                }
                 if (incoming_packet.header.flags & FIN)
                 {
                     if (sham_end_recieve(socket, incoming_packet, addr) == -1)
-                    return 0;
+                        return 0;
+                }
+                double random_value = (double)rand() / RAND_MAX;
+                if (random_value < loss_rate)
+                {
+                    char log_msg[100];
+                    sprintf(log_msg, "DROP DATA SEQ=%u", unacked_packet.packet.header.seq_num);
+                    log_event(log_msg, log_file);
+                    continue;
                 }
                 if (data_len > 0)
                 {
@@ -469,6 +509,31 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
                     sprintf(log_msg, "SND ACK=%u WIN=%u", ack_response.ack_num, ack_response.window_size);
                     log_event(log_msg, log_file);
                 }
+            }
+        }
+        if (unacked_packet.in_use)
+        {
+            struct timeval now;
+            gettimeofday(&now, NULL);
+
+            long elapsed_ms = (now.tv_sec - unacked_packet.sent_time.tv_sec) * 1000 +
+                              (now.tv_usec - unacked_packet.sent_time.tv_usec) / 1000;
+
+            if (elapsed_ms > RTO)
+            {
+                printf("Timeout, retransmitting message...\n");
+
+                sprintf(log_msg, "TIMEOUT SEQ=%u", unacked_packet.packet.header.seq_num);
+                log_event(log_msg, log_file);
+
+                // Retransmit the stored packet
+                sendto(socket, &unacked_packet.packet, sizeof(sham_header) + unacked_packet.actual_data_length, 0, (struct sockaddr *)addr, sizeof(*addr));
+
+                sprintf(log_msg, "RETX DATA SEQ=%u LEN=%zu", unacked_packet.packet.header.seq_num, unacked_packet.actual_data_length);
+                log_event(log_msg, log_file);
+
+                // Reset the timer for the retransmitted packet
+                gettimeofday(&unacked_packet.sent_time, NULL);
             }
         }
     }
@@ -550,10 +615,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        if (!chat_mode_fn(server_socket, &client_addr_in))
-        {
-            sham_end(server_socket, &client_addr_in);
-        }
+        chat_mode_fn(server_socket, &client_addr_in);
     }
     close(server_socket);
     if (log_file)
