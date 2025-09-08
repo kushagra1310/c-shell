@@ -160,13 +160,13 @@ int send_file(int socket, struct sockaddr_in *addr, char *filename)
         {
             if (current_seq_num + read_bytes - ack_num >= window_size)
             {
-                printf("Server Buffer full need to wait\n");
+                // printf("Server Buffer full need to wait\n");
                 break;
             }
             int slot = find_free_slot(sliding_window_arr);
             if (slot == -1)
             {
-                printf("slots are full rn\n");
+                // printf("slots are full rn\n");
                 break;
             }
 
@@ -174,7 +174,7 @@ int send_file(int socket, struct sockaddr_in *addr, char *filename)
             if (!read_bytes)
             {
                 file_complete = 1;
-                printf("File read\n");
+                // printf("File read\n");
                 break;
             }
 
@@ -220,7 +220,7 @@ int send_file(int socket, struct sockaddr_in *addr, char *filename)
                     if (packet_end <= ack_num)
                     {
                         sliding_window_arr[i].in_use = 0; // Free the slot
-                        printf("Packet SEQ=%u acknowledged\n", sliding_window_arr[i].packet.header.seq_num);
+                        // printf("Packet SEQ=%u acknowledged\n", sliding_window_arr[i].packet.header.seq_num);
                     }
                 }
             }
@@ -277,7 +277,7 @@ int sham_server_accept(int client_socket, struct sockaddr_in *server_address_in)
     sprintf(log_msg, "RCV ACK FOR SYN");
     log_event(log_msg, log_file);
 
-    print_header(client_to_server_handshake_1); // for debugging
+    // print_header(client_to_server_handshake_1); // for debugging
 
     memset(&client_to_server_handshake_2, 0, sizeof(client_to_server_handshake_2));
     client_to_server_handshake_2.seq_num = initial_seq_num;
@@ -316,7 +316,7 @@ int sham_end(int socketfd, struct sockaddr_in *addr_in)
         perror("sendto FIN failed");
         return -1;
     }
-    printf("FIN sent\n");
+    // printf("FIN sent\n");
 
     // Step 2: Receive ACK
     n = recvfrom(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, &addr_len);
@@ -327,7 +327,7 @@ int sham_end(int socketfd, struct sockaddr_in *addr_in)
     }
 
     log_event("SND ACK FOR FIN", log_file);
-    printf("ACK received\n");
+    // printf("ACK received\n");
 
     // Step 3: Receive FIN
     n = recvfrom(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, &addr_len);
@@ -339,7 +339,7 @@ int sham_end(int socketfd, struct sockaddr_in *addr_in)
 
     sprintf(log_msg, "RCV FIN SEQ=%u", fin_handshake.seq_num);
     log_event(log_msg, log_file);
-    printf("FIN received\n");
+    // printf("FIN received\n");
 
     // Step 4: Send final ACK
     fin_handshake.flags = ACK;
@@ -353,7 +353,7 @@ int sham_end(int socketfd, struct sockaddr_in *addr_in)
         perror("sendto final ACK failed");
         return -1;
     }
-    printf("Final ACK sent - connection terminated\n");
+    // printf("Final ACK sent - connection terminated\n");
 
     return 0;
 }
@@ -419,7 +419,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
             unacked_packet.actual_data_length = msg_len;
             unacked_packet.in_use = 1;
             gettimeofday(&unacked_packet.sent_time, NULL);
-            printf("Sending message...\n");
+            // printf("Sending message...\n");
 
             int sent_bytes = sendto(socket, &out_packet, sizeof(sham_header) + msg_len, 0, (struct sockaddr *)addr, sizeof(*addr));
             if (sent_bytes >= 0)
@@ -445,7 +445,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
 
                     if (incoming_packet.header.ack_num == expected_ack_num)
                     {
-                        printf("Message delivered successfully!\n");
+                        // printf("Message delivered successfully!\n");
                         sprintf(log_msg, "RCV ACK=%u", incoming_packet.header.ack_num);
                         log_event(log_msg, log_file);
 
@@ -499,7 +499,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
 
             if (elapsed_ms > RTO)
             {
-                printf("Timeout, retransmitting message...\n");
+                // printf("Timeout, retransmitting message...\n");
 
                 sprintf(log_msg, "TIMEOUT SEQ=%u", unacked_packet.packet.header.seq_num);
                 log_event(log_msg, log_file);

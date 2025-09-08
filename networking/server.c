@@ -90,7 +90,7 @@ int sham_client_connect(int server_socket, struct sockaddr_in *client_addr_in)
     sprintf(log_msg, "RCV SYN SEQ=%u", server_to_client_handshake.seq_num);
     log_event(log_msg, log_file);
 
-    printf("Message received %d\n", server_to_client_handshake.seq_num);
+    // printf("Message received %d\n", server_to_client_handshake.seq_num);
 
     server_to_client_handshake.ack_num = server_to_client_handshake.seq_num + 1;
     server_to_client_handshake.seq_num = initial_seq_num;
@@ -117,8 +117,8 @@ int sham_client_connect(int server_socket, struct sockaddr_in *client_addr_in)
     if (!(server_to_client_handshake.flags & ACK) || (server_to_client_handshake.ack_num != initial_seq_num + 1))
         return 1;
 
-    if (n > 0)
-        printf("recevied acknowledgement\n");
+    // if (n > 0)
+    //     printf("recevied acknowledgement\n");
 
     return 0;
 }
@@ -282,7 +282,7 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         if (packet.header.seq_num == expected_seq_num)
         {
             fwrite(packet.data, 1, actual_size, file);
-            printf("Actual size %d\n", actual_size);
+            // printf("Actual size %d\n", actual_size);
             // if (actual_size < MAXPAYLOADSIZE)
             // {
             //     is_it_over = 1;
@@ -303,7 +303,7 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
                     {
 
                         // Found the next packet in sequence!
-                        printf("Delivering buffered packet SEQ=%u\n", expected_seq_num);
+                        // printf("Delivering buffered packet SEQ=%u\n", expected_seq_num);
 
                         fwrite(buffer[i].packet.data, 1, buffer[i].data_length, file);
                         // if (buffer[i].data_length < MAXPAYLOADSIZE)
@@ -340,17 +340,17 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
                         memcpy(&buffer[i].packet, &packet, sizeof(sham_packet));
                         buffer[i].data_length = actual_size;
                         buffer[i].received = 1;
-                        printf("Buffered packet SEQ=%u in slot %d\n", packet.header.seq_num, i);
+                        // printf("Buffered packet SEQ=%u in slot %d\n", packet.header.seq_num, i);
                         break;
                     }
                 }
-                if (i == WINDOW_SIZE)
-                    printf("Buffer full\n");
+                // if (i == WINDOW_SIZE)
+                //     printf("Buffer full\n");
             }
         }
         else
         {
-            printf("Duplicate packet received\n");
+            // printf("Duplicate packet received\n");
             // Buffer out-of-order packet
             // Send ACK for what we still expect
         }
@@ -441,7 +441,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
             unacked_packet.actual_data_length = msg_len;
             unacked_packet.in_use = 1;
             gettimeofday(&unacked_packet.sent_time, NULL);
-            printf("Sending message...\n");
+            // printf("Sending message...\n");
 
             int sent_bytes = sendto(socket, &out_packet, sizeof(sham_header) + msg_len, 0, (struct sockaddr *)addr, sizeof(*addr));
             if (sent_bytes >= 0)
@@ -467,7 +467,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
 
                     if (incoming_packet.header.ack_num == expected_ack_num)
                     {
-                        printf("Message delivered successfully!\n");
+                        // printf("Message delivered successfully!\n");
                         sprintf(log_msg, "RCV ACK=%u", incoming_packet.header.ack_num);
                         log_event(log_msg, log_file);
 
@@ -521,7 +521,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
 
             if (elapsed_ms > RTO)
             {
-                printf("Timeout, retransmitting message...\n");
+                // printf("Timeout, retransmitting message...\n");
 
                 sprintf(log_msg, "TIMEOUT SEQ=%u", unacked_packet.packet.header.seq_num);
                 log_event(log_msg, log_file);
