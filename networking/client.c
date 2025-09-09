@@ -133,6 +133,32 @@ int are_there_unack(sliding_window *window)
     return 0;
 }
 
+int send_filename(int socket, struct sockaddr_in *addr, const char *filename)
+{
+    sham_packet packet;
+    memset(&packet, 0, sizeof(packet));
+
+    packet.header.seq_num = current_seq_num;
+    packet.header.ack_num = 0;
+    packet.header.flags = SYN;
+    packet.header.window_size = WINDOW_SIZE;
+
+    size_t len = strlen(filename);
+    if (len >= MAXPAYLOADSIZE) len = MAXPAYLOADSIZE - 1;
+    memcpy(packet.data, filename, len);
+
+    int total_len = sizeof(sham_header) + len;
+
+    int sent = sendto(socket, &packet, total_len, 0,
+                      (struct sockaddr *)addr, sizeof(*addr));
+    // not waiting for ack rn, not mentioned in doc
+    // char log_msg[256];
+    // snprintf(log_msg, sizeof(log_msg), "Sent filename: %s", filename);
+    // log_event(log_msg, log_file);
+
+    return 0;
+}
+
 int send_file(int socket, struct sockaddr_in *addr, char *filename)
 {
     // socklen_t addr_len = sizeof(*addr);
@@ -402,7 +428,7 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
 
             if (strcmp(input_buffer, "/quit") == 0)
             {
-                sham_end(socket,addr);
+                sham_end(socket, addr);
                 return 0;
             }
 
@@ -592,7 +618,10 @@ int main(int argc, char *argv[])
 
     sham_server_accept(client_socket, &server_address_in);
     if (!chat_mode)
+    {
+        send_filename(client_socket, &server_address_in, output_file);
         send_file(client_socket, &server_address_in, input_file);
+    }
     else
     {
         chat_mode_fn(client_socket, &server_address_in);

@@ -380,6 +380,43 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
     fclose(file);
     return 0;
 }
+int recv_filename(int socket, struct sockaddr_in *addr, char *output_filename)
+{
+    sham_packet packet;
+    socklen_t addr_len = sizeof(*addr);
+
+    memset(&packet, 0, sizeof(packet));
+
+    int recv_bytes = recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)addr, &addr_len);
+
+    if (recv_bytes < 0)
+    {
+        perror("recvfrom failed");
+        return -1;
+    }
+
+    if (recv_bytes > (int)sizeof(sham_header))
+    {
+        int data_len = recv_bytes - sizeof(sham_header);
+
+        // null termination
+        if (data_len >= (int)sizeof(packet.data))
+            data_len = sizeof(packet.data) - 1;
+
+        memcpy(output_filename, packet.data, data_len);
+        output_filename[data_len] = '\0';
+
+        printf("Received filename: %s\n", output_filename);
+    }
+    else
+    {
+        fprintf(stderr, "Received packet too small to contain filename\n");
+        return -1;
+    }
+
+    return 0;
+}
+
 int chat_mode_fn(int socket, struct sockaddr_in *addr)
 {
     fd_set read_fds;
@@ -606,12 +643,13 @@ int main(int argc, char *argv[])
         perror("bind failed");
         exit(1);
     }
-
+    char output_file[1025];
     sham_client_connect(server_socket, &client_addr_in);
     if (!chat_mode)
     {
-        receive_file(server_socket, &client_addr_in, "received_file.txt");
-        print_md5sum("received_file.txt");
+        recv_filename(server_socket, &client_addr_in, output_file);
+        receive_file(server_socket, &client_addr_in, output_file);
+        print_md5sum(output_file);
     }
     else
     {
