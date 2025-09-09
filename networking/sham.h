@@ -24,13 +24,13 @@ typedef struct
     uint32_t ack_num;     // Acknowledgment Number
     uint16_t flags;       // Control flags (SYN, ACK, FIN)
     uint16_t window_size; // Flow control window size
-} sham_header;
+} __attribute__((packed)) sham_header; // no padding
 
 typedef struct
 {
     sham_header header;
     char data[MAXPAYLOADSIZE];
-} sham_packet;
+}  __attribute__((packed)) sham_packet;
 
 typedef struct
 {

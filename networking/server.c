@@ -20,9 +20,21 @@ int logging_enabled = 0;
 float loss_rate;
 int chat_mode;
 
+void print_header(sham_header to_be_printed)
+{
+    printf("seq_num: %u\n", to_be_printed.seq_num);
+    printf("ack_num: %u\n", to_be_printed.ack_num);
+    printf("flags: %u\n", to_be_printed.flags);
+    printf("window_size: %u\n", to_be_printed.window_size);
+}
+
+// ############## LLM Generated Code Begins ##############
 int sham_end_recieve(int socket, sham_packet incoming_packet, struct sockaddr_in *addr)
 {
     // LLM
+    incoming_packet.header.seq_num = ntohl(incoming_packet.header.seq_num);
+    incoming_packet.header.flags = ntohs(incoming_packet.header.flags);
+
     char log_msg[100];
     // Step 1: Receive FIN
     sprintf(log_msg, "RCV FIN SEQ=%u", incoming_packet.header.seq_num);
@@ -33,45 +45,80 @@ int sham_end_recieve(int socket, sham_packet incoming_packet, struct sockaddr_in
     // Step 2: Send ACK for their FIN
     sham_header ack_response;
     memset(&ack_response, 0, sizeof(ack_response));
-    ack_response.flags = ACK;
-    ack_response.ack_num = incoming_packet.header.seq_num + 1;
+    ack_response.flags = htons(ACK);
+    ack_response.ack_num = htonl(incoming_packet.header.seq_num + 1);
 
     log_event("SND ACK FOR FIN", log_file);
     sendto(socket, &ack_response, sizeof(ack_response), 0,
            (struct sockaddr *)addr, sizeof(*addr));
 
     // ---- Simulate CLOSE-WAIT ----
-    // At this point, your application decides it's done and sends its own FIN.
-
+    // Step 3: Send our FIN
     sham_header fin_response;
     memset(&fin_response, 0, sizeof(fin_response));
-    fin_response.flags = FIN;
-    fin_response.seq_num = current_seq_num++; // track your own SEQ numbers
+    uint32_t my_fin_seq = initial_seq_num + 1; // Use a predictable sequence number
 
-    sprintf(log_msg, "SND FIN SEQ=%u", fin_response.seq_num);
+    sprintf(log_msg, "SND FIN SEQ=%u", my_fin_seq);
     log_event(log_msg, log_file);
+
+    fin_response.flags = htons(FIN);
+    fin_response.seq_num = htonl(my_fin_seq);
 
     sendto(socket, &fin_response, sizeof(fin_response), 0,
            (struct sockaddr *)addr, sizeof(*addr));
 
-    // Step 4: Wait for their ACK to our FIN
+    // Step 4: Wait for their ACK to our FIN, with retransmission
     sham_header incoming_ack;
     socklen_t addr_len = sizeof(*addr);
-    int bytes = recvfrom(socket, &incoming_ack, sizeof(incoming_ack), 0,
-                         (struct sockaddr *)addr, &addr_len);
 
-    if (bytes > 0 && (incoming_ack.flags & ACK) &&
-        incoming_ack.ack_num == fin_response.seq_num + 1)
+    // Set a timeout on the socket
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = RTO * 1000; // Use your RTO value for the timeout
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    int retrans_count = 0;
+    while (retrans_count < 5) // Try up to 5 times
     {
-        sprintf(log_msg, "RCV ACK FOR FIN, ACK=%u", incoming_ack.ack_num);
-        log_event(log_msg, log_file);
+        int bytes = recvfrom(socket, &incoming_ack, sizeof(incoming_ack), 0,
+                             (struct sockaddr *)addr, &addr_len);
 
-        printf("Connection closed cleanly.\n");
-        return -1; // signal termination complete
+        if (bytes > 0)
+        {
+            incoming_ack.flags = ntohs(incoming_ack.flags);
+            incoming_ack.ack_num = ntohl(incoming_ack.ack_num);
+
+            if ((incoming_ack.flags & ACK) && incoming_ack.ack_num == my_fin_seq + 1)
+            {
+                sprintf(log_msg, "RCV ACK FOR FIN, ACK=%u", incoming_ack.ack_num);
+                log_event(log_msg, log_file);
+                printf("Connection closed cleanly.\n");
+
+                // Reset socket to blocking before returning
+                tv.tv_sec = 0;
+                tv.tv_usec = 0;
+                setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+                return -1; // Signal termination complete
+            }
+        }
+        else
+        {
+            // Timeout occurred, retransmit our FIN
+            printf("Timeout waiting for final ACK. Retransmitting FIN...\n");
+            sendto(socket, &fin_response, sizeof(fin_response), 0, (struct sockaddr *)addr, sizeof(*addr));
+            retrans_count++;
+        }
     }
+
+    printf("Termination failed. No final ACK received.\n");
+    // Reset socket to blocking before returning
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     return 0;
     // LLM
 }
+// ############## LLM Generated Code Ends ##############
 
 int sham_client_connect(int server_socket, struct sockaddr_in *client_addr_in)
 {
@@ -84,6 +131,10 @@ int sham_client_connect(int server_socket, struct sockaddr_in *client_addr_in)
         perror("recvfrom failed");
         return 1;
     }
+
+    server_to_client_handshake.seq_num = ntohl(server_to_client_handshake.seq_num);
+    server_to_client_handshake.flags = ntohs(server_to_client_handshake.flags);
+
     if (!(server_to_client_handshake.flags & SYN))
         return 1;
     char log_msg[100];
@@ -92,9 +143,13 @@ int sham_client_connect(int server_socket, struct sockaddr_in *client_addr_in)
 
     // printf("Message received %d\n", server_to_client_handshake.seq_num);
 
-    server_to_client_handshake.ack_num = server_to_client_handshake.seq_num + 1;
-    server_to_client_handshake.seq_num = initial_seq_num;
-    server_to_client_handshake.flags |= ACK;
+    uint32_t ack_num_val = server_to_client_handshake.seq_num + 1;
+    sprintf(log_msg, "SND SYN-ACK SEQ=%u ACK=%u", initial_seq_num, ack_num_val);
+    log_event(log_msg, log_file);
+
+    server_to_client_handshake.ack_num = htonl(ack_num_val);
+    server_to_client_handshake.seq_num = htonl(initial_seq_num);
+    server_to_client_handshake.flags = htons(SYN | ACK);
 
     if (sendto(server_socket, &server_to_client_handshake, sizeof(server_to_client_handshake), 0, (struct sockaddr *)client_addr_in, sizeof(*client_addr_in)) < 0)
     {
@@ -102,14 +157,14 @@ int sham_client_connect(int server_socket, struct sockaddr_in *client_addr_in)
         return 1;
     }
 
-    sprintf(log_msg, "SND SYN-ACK SEQ=%u ACK=%u", server_to_client_handshake.seq_num, server_to_client_handshake.ack_num);
-    log_event(log_msg, log_file);
-
     if (recvfrom(server_socket, &server_to_client_handshake, sizeof(server_to_client_handshake), 0, (struct sockaddr *)client_addr_in, &client_addr_len) < 0)
     {
         perror("server ACK recvfrom failed");
         return 1;
     }
+
+    server_to_client_handshake.ack_num = ntohl(server_to_client_handshake.ack_num);
+    server_to_client_handshake.flags = ntohs(server_to_client_handshake.flags);
 
     sprintf(log_msg, "RCV ACK FOR SYN");
     log_event(log_msg, log_file);
@@ -122,57 +177,95 @@ int sham_client_connect(int server_socket, struct sockaddr_in *client_addr_in)
 
     return 0;
 }
-// LLM
+
+// ############## LLM Generated Code Begins ##############
 int sham_end(int socketfd, struct sockaddr_in *addr_in)
 {
     socklen_t addr_len = sizeof(*addr_in);
-
     sham_header fin_handshake;
+    char log_msg[100];
 
-    // Step 1: Send FIN packet
-    fin_handshake.flags = FIN;
-    fin_handshake.seq_num = current_seq_num;
-    int n = sendto(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, sizeof(*addr_in));
-    if (n < 0)
+    // Step 1: Send FIN packet and prepare for retransmission
+    uint32_t my_fin_seq = current_seq_num;
+    
+    fin_handshake.flags = htons(FIN);
+    fin_handshake.seq_num = htonl(my_fin_seq);
+    
+    // Set a timeout for all receive calls in this function
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = RTO * 1000; // Use your RTO value
+    setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    // Initially send the FIN
+    sprintf(log_msg, "SND FIN SEQ=%u", my_fin_seq);
+    log_event(log_msg, log_file);
+    sendto(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, sizeof(*addr_in));
+
+    // Step 2: Wait for the ACK to our FIN, retransmitting our FIN on timeout
+    int retrans_count = 0;
+    while(retrans_count < 5)
     {
-        perror("sendto FIN failed");
-        return -1;
-    }
-    printf("FIN sent\n");
+        if (recvfrom(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, &addr_len) > 0) {
+            fin_handshake.flags = ntohs(fin_handshake.flags);
+            fin_handshake.ack_num = ntohl(fin_handshake.ack_num);
 
-    // Step 2: Receive ACK
-    n = recvfrom(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, &addr_len);
-    if (n < 0)
-    {
-        perror("recvfrom ACK failed");
-        return -1;
+            if ((fin_handshake.flags & ACK) && fin_handshake.ack_num == my_fin_seq + 1) {
+                log_event("RCV ACK FOR FIN", log_file);
+                break; // This is the ACK we wanted, proceed.
+            }
+            // If it's not the right ACK, ignore it and loop to receive again.
+        } else {
+            // Timeout occurred, retransmit our FIN
+            printf("Timeout waiting for FIN-ACK. Retransmitting FIN...\n");
+            
+            fin_handshake.flags = htons(FIN);
+            fin_handshake.seq_num = htonl(my_fin_seq);
+            sendto(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, sizeof(*addr_in));
+            retrans_count++;
+        }
+        if (retrans_count >= 5) {
+             printf("Termination failed. No ACK for FIN received.\n");
+             return -1;
+        }
     }
-    printf("ACK received\n");
 
-    // Step 3: Receive FIN
-    n = recvfrom(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, &addr_len);
-    if (n < 0)
-    {
-        perror("recvfrom FIN failed");
-        return -1;
+    // Step 3: Wait for the Server's FIN
+    while (1) {
+         if (recvfrom(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, &addr_len) > 0) {
+            fin_handshake.flags = ntohs(fin_handshake.flags);
+            fin_handshake.seq_num = ntohl(fin_handshake.seq_num);
+
+            if (fin_handshake.flags & FIN) {
+                sprintf(log_msg, "RCV FIN SEQ=%u", fin_handshake.seq_num);
+                log_event(log_msg, log_file);
+                break; // This is the FIN we wanted, proceed.
+            }
+             // If it's not a FIN, ignore it and loop to receive again.
+         } else {
+            perror("Timeout or error waiting for peer's FIN");
+            return -1;
+         }
     }
-    printf("FIN received\n");
-
+    
     // Step 4: Send final ACK
-    fin_handshake.flags = ACK;
-    fin_handshake.ack_num = fin_handshake.seq_num + 1;
-    n = sendto(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, sizeof(*addr_in));
-    if (n < 0)
-    {
-        perror("sendto final ACK failed");
-        return -1;
-    }
-    printf("Final ACK sent - connection terminated\n");
+    uint32_t ack_for_peer = fin_handshake.seq_num + 1;
+    sprintf(log_msg, "SND ACK FOR FIN, ACK=%u", ack_for_peer);
+    log_event(log_msg, log_file);
+
+    fin_handshake.flags = htons(ACK);
+    fin_handshake.ack_num = htonl(ack_for_peer);
+    sendto(socketfd, &fin_handshake, sizeof(fin_handshake), 0, (struct sockaddr *)addr_in, sizeof(*addr_in));
+
+    // Reset timeout to blocking before returning to other functions
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     return 0;
 }
-// LLM
-// LLM
+// ############## LLM Generated Code Ends ##############
+// ############## LLM Generated Code Begins ##############
 
 void print_md5sum(const char *filename)
 {
@@ -233,8 +326,8 @@ void print_md5sum(const char *filename)
     }
     printf("\n");
 }
-
-// LLM
+// ############## LLM Generated Code Ends ##############
+// ############## LLM Generated Code Begins ##############
 int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
 {
     char log_msg[100];
@@ -253,124 +346,134 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
     sham_packet packet;
     while (!is_it_over)
     {
+        memset(&packet, 0, sizeof(packet));
         int recv_bytes = recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)addr, &addr_len);
         if (recv_bytes <= 0)
             continue;
+
+        sham_header host_header = packet.header;
+        host_header.seq_num = ntohl(host_header.seq_num);
+        host_header.flags = ntohs(host_header.flags);
+
         int actual_size = recv_bytes - sizeof(sham_header);
 
-        double random_value = (double)rand() / RAND_MAX;
-
-        // LLM
-        if (packet.header.flags & FIN)
+        // ############## LLM Generated Code Begins ##############
+        if (host_header.flags & FIN)
         {
             if (sham_end_recieve(socket, packet, addr) == -1)
                 return 0;
         }
-        // LLM
-        if (random_value < loss_rate)
-        {
-            char log_msg[100];
-            sprintf(log_msg, "DROP DATA SEQ=%u", packet.header.seq_num);
-            log_event(log_msg, log_file);
-            continue;
-        }
-
-        sprintf(log_msg, "RCV DATA SEQ=%u LEN=%u", packet.header.seq_num, actual_size);
-        log_event(log_msg, log_file);
-
-        // check if this is the packet we're expecting
-        if (packet.header.seq_num == expected_seq_num)
-        {
-            fwrite(packet.data, 1, actual_size, file);
-            // printf("Actual size %d\n", actual_size);
-            // if (actual_size < MAXPAYLOADSIZE)
-            // {
-            //     is_it_over = 1;
-            // }
-            expected_seq_num += actual_size;
-
-            int check_again = 1;
-
-            // if we pop something from buffer, recheck if more things can be popped
-            while (check_again)
-            {
-                check_again = 0;
-
-                for (int i = 0; i < WINDOW_SIZE; i++)
-                {
-                    if (buffer[i].received &&
-                        buffer[i].packet.header.seq_num == expected_seq_num)
-                    {
-
-                        // Found the next packet in sequence!
-                        // printf("Delivering buffered packet SEQ=%u\n", expected_seq_num);
-
-                        fwrite(buffer[i].packet.data, 1, buffer[i].data_length, file);
-                        // if (buffer[i].data_length < MAXPAYLOADSIZE)
-                        //     is_it_over = 1;
-                        expected_seq_num += buffer[i].data_length;
-
-                        // free the buffer slot
-                        buffer[i].received = 0;
-                        check_again = 1;
-                        break;
-                    }
-                }
-            }
-        }
-        else if (packet.header.seq_num > expected_seq_num)
-        {
-            int already_buffered = 0;
-            for (int i = 0; i < WINDOW_SIZE; i++)
-            {
-                if (buffer[i].received && buffer[i].packet.header.seq_num == packet.header.seq_num)
-                {
-                    already_buffered = 1;
-                    break;
-                }
-            }
-            // keep the packet in buffer
-            if (!already_buffered)
-            {
-                int i;
-                for (i = 0; i < WINDOW_SIZE; i++)
-                {
-                    if (!buffer[i].received)
-                    {
-                        memcpy(&buffer[i].packet, &packet, sizeof(sham_packet));
-                        buffer[i].data_length = actual_size;
-                        buffer[i].received = 1;
-                        // printf("Buffered packet SEQ=%u in slot %d\n", packet.header.seq_num, i);
-                        break;
-                    }
-                }
-                // if (i == WINDOW_SIZE)
-                //     printf("Buffer full\n");
-            }
-        }
         else
         {
-            // printf("Duplicate packet received\n");
-            // Buffer out-of-order packet
-            // Send ACK for what we still expect
+            // ############## LLM Generated Code Ends ##############
+            if (((double)rand() / RAND_MAX) < loss_rate)
+            {
+                char log_msg[100];
+                sprintf(log_msg, "DROP DATA SEQ=%u", host_header.seq_num);
+                log_event(log_msg, log_file);
+                continue;
+            }
+
+            sprintf(log_msg, "RCV DATA SEQ=%u LEN=%u", host_header.seq_num, actual_size);
+            log_event(log_msg, log_file);
+
+            // check if this is the packet we're expecting
+            if (host_header.seq_num == expected_seq_num)
+            {
+                fwrite(packet.data, 1, actual_size, file);
+                // printf("Actual size %d\n", actual_size);
+                // if (actual_size < MAXPAYLOADSIZE)
+                // {
+                //     is_it_over = 1;
+                // }
+                expected_seq_num += actual_size;
+
+                int check_again = 1;
+
+                // if we pop something from buffer, recheck if more things can be popped
+                while (check_again)
+                {
+                    check_again = 0;
+
+                    for (int i = 0; i < WINDOW_SIZE; i++)
+                    {
+                        if (buffer[i].received &&
+                            ntohl(buffer[i].packet.header.seq_num) == expected_seq_num)
+                        {
+
+                            // Found the next packet in sequence!
+                            // printf("Delivering buffered packet SEQ=%u\n", expected_seq_num);
+
+                            fwrite(buffer[i].packet.data, 1, buffer[i].data_length, file);
+                            // if (buffer[i].data_length < MAXPAYLOADSIZE)
+                            //     is_it_over = 1;
+                            expected_seq_num += buffer[i].data_length;
+
+                            // free the buffer slot
+                            buffer[i].received = 0;
+                            check_again = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+            else if (host_header.seq_num > expected_seq_num)
+            {
+                int already_buffered = 0;
+                for (int i = 0; i < WINDOW_SIZE; i++)
+                {
+                    if (buffer[i].received && ntohl(buffer[i].packet.header.seq_num) == host_header.seq_num)
+                    {
+                        already_buffered = 1;
+                        break;
+                    }
+                }
+                // keep the packet in buffer
+                if (!already_buffered)
+                {
+                    int i;
+                    for (i = 0; i < WINDOW_SIZE; i++)
+                    {
+                        if (!buffer[i].received)
+                        {
+                            memcpy(&buffer[i].packet, &packet, sizeof(sham_packet));
+                            buffer[i].data_length = actual_size;
+                            buffer[i].received = 1;
+                            // printf("Buffered packet SEQ=%u in slot %d\n", packet.header.seq_num, i);
+                            break;
+                        }
+                    }
+                    // if (i == WINDOW_SIZE)
+                    //     printf("Buffer full\n");
+                }
+            }
+            else
+            {
+                // printf("Duplicate packet received\n");
+                // Buffer out-of-order packet
+                // Send ACK for what we still expect
+            }
+            sham_header ack_packet;
+            memset(&ack_packet, 0, sizeof(ack_packet));
+
+            sprintf(log_msg, "SND ACK=%u WIN=%u", expected_seq_num, available_buffer_size);
+            log_event(log_msg, log_file);
+
+            ack_packet.flags = htons(ACK);
+            ack_packet.ack_num = htonl(expected_seq_num);
+            ack_packet.window_size = htons(available_buffer_size);
+
+            sendto(socket, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)addr, sizeof(*addr));
         }
-        sham_header ack_packet;
-        memset(&ack_packet, 0, sizeof(ack_packet));
-
-        ack_packet.flags = ACK;
-        ack_packet.ack_num = expected_seq_num;
-        ack_packet.window_size = available_buffer_size;
-
-        sendto(socket, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)addr, sizeof(*addr));
-        sprintf(log_msg, "SND ACK=%u WIN=%u", ack_packet.ack_num, ack_packet.window_size);
-        log_event(log_msg, log_file);
     }
+    memset(&packet, 0, sizeof(packet));
     int recv_bytes = recvfrom(socket, &packet, sizeof(packet), 0, (struct sockaddr *)addr, &addr_len);
 
     if (recv_bytes > 0)
     {
         int data_len = recv_bytes - sizeof(sham_header);
-        // LLM
+        packet.header.flags = ntohs(packet.header.flags);
+
         if (packet.header.flags & FIN)
         {
             if (sham_end_recieve(socket, packet, addr) == -1)
@@ -420,7 +523,7 @@ int recv_filename(int socket, struct sockaddr_in *addr, char *output_filename)
 int chat_mode_fn(int socket, struct sockaddr_in *addr)
 {
     fd_set read_fds;
-    int max_fd = -1;
+    int max_fd = socket;
     char input_buffer[1024];
     char log_msg[100];
     socklen_t addr_len = sizeof(*addr);
@@ -433,17 +536,20 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
         if (!unacked_packet.in_use)
         {
             FD_SET(STDIN_FILENO, &read_fds);
-            max_fd = (max_fd > STDIN_FILENO) ? max_fd : STDIN_FILENO;
-        } // not allowing to send more msgs until previous one is acknowledged for reliability
+        }
         FD_SET(socket, &read_fds);
-        max_fd = (max_fd > socket) ? max_fd : socket;
 
         struct timeval timeout;
         timeout.tv_sec = 0;
         timeout.tv_usec = 200000; // check for retransmission every 200 ms
-        // unacked_packet.in_use = 0;
 
         int activity = select(max_fd + 1, &read_fds, NULL, NULL, &timeout);
+        if (activity < 0)
+        {
+            perror("select error");
+            continue;
+        }
+
         if (FD_ISSET(STDIN_FILENO, &read_fds))
         {
             if (fgets(input_buffer, sizeof(input_buffer), stdin) == NULL)
@@ -467,26 +573,28 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
 
             sham_packet out_packet;
             memset(&out_packet, 0, sizeof(out_packet));
-            out_packet.header.seq_num = current_seq_num;
-            out_packet.header.flags = 0;
+
+            sprintf(log_msg, "SND DATA SEQ=%u LEN=%d", current_seq_num, len);
+            log_event(log_msg, log_file);
+
+            out_packet.header.seq_num = htonl(current_seq_num);
+            out_packet.header.flags = htons(0);
 
             size_t msg_len = (len > MAXPAYLOADSIZE - 1) ? MAXPAYLOADSIZE - 1 : len;
             strncpy(out_packet.data, input_buffer, msg_len);
             out_packet.data[msg_len] = '\0';
 
-            unacked_packet.packet = out_packet;
+            memcpy(&unacked_packet.packet, &out_packet, sizeof(sham_header) + msg_len);
             unacked_packet.actual_data_length = msg_len;
             unacked_packet.in_use = 1;
             gettimeofday(&unacked_packet.sent_time, NULL);
             // printf("Sending message...\n");
 
             int sent_bytes = sendto(socket, &out_packet, sizeof(sham_header) + msg_len, 0, (struct sockaddr *)addr, sizeof(*addr));
-            if (sent_bytes >= 0)
+            if (sent_bytes < 0)
             {
-                sprintf(log_msg, "SND DATA SEQ=%u LEN=%zu", current_seq_num, msg_len);
-                log_event(log_msg, log_file);
+                perror("chat sendto");
             }
-            // current_seq_num += msg_len;
         }
         if (FD_ISSET(socket, &read_fds))
         {
@@ -498,14 +606,20 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
             {
                 int data_len = recv_bytes - sizeof(sham_header);
 
-                if (unacked_packet.in_use && data_len <= 0 && (incoming_packet.header.flags & ACK))
-                {
-                    uint32_t expected_ack_num = unacked_packet.packet.header.seq_num + unacked_packet.actual_data_length;
+                sham_header host_header = incoming_packet.header;
+                host_header.seq_num = ntohl(host_header.seq_num);
+                host_header.ack_num = ntohl(host_header.ack_num);
+                host_header.flags = ntohs(host_header.flags);
+                host_header.window_size = ntohs(host_header.window_size);
 
-                    if (incoming_packet.header.ack_num == expected_ack_num)
+                if (unacked_packet.in_use && data_len <= 0 && (host_header.flags & ACK))
+                {
+                    uint32_t expected_ack_num = ntohl(unacked_packet.packet.header.seq_num) + unacked_packet.actual_data_length;
+
+                    if (host_header.ack_num == expected_ack_num)
                     {
                         // printf("Message delivered successfully!\n");
-                        sprintf(log_msg, "RCV ACK=%u", incoming_packet.header.ack_num);
+                        sprintf(log_msg, "RCV ACK=%u", host_header.ack_num);
                         log_event(log_msg, log_file);
 
                         // free the slot, ack received
@@ -514,37 +628,39 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
                         continue;
                     }
                 }
-                if (incoming_packet.header.flags & FIN)
+                if (host_header.flags & FIN)
                 {
                     if (sham_end_recieve(socket, incoming_packet, addr) == -1)
                         return 0;
                 }
-                double random_value = (double)rand() / RAND_MAX;
-                if (random_value < loss_rate)
-                {
-                    char log_msg[100];
-                    sprintf(log_msg, "DROP DATA SEQ=%u", unacked_packet.packet.header.seq_num);
-                    log_event(log_msg, log_file);
-                    continue;
-                }
+
                 if (data_len > 0)
                 {
+                    if (((double)rand() / RAND_MAX) < loss_rate)
+                    {
+                        sprintf(log_msg, "DROP DATA SEQ=%u", host_header.seq_num);
+                        log_event(log_msg, log_file);
+                        continue;
+                    }
                     incoming_packet.data[data_len] = '\0'; // ensuring string is null terminated
 
-                    sprintf(log_msg, "RCV DATA SEQ=%u LEN=%d", incoming_packet.header.seq_num, data_len);
+                    sprintf(log_msg, "RCV DATA SEQ=%u LEN=%d", host_header.seq_num, data_len);
                     log_event(log_msg, log_file);
 
                     printf("Incoming: %s\n", incoming_packet.data);
 
                     sham_header ack_response;
                     memset(&ack_response, 0, sizeof(ack_response));
-                    ack_response.flags = ACK;
-                    ack_response.ack_num = incoming_packet.header.seq_num + data_len;
-                    ack_response.window_size = available_buffer_size;
+
+                    uint32_t ack_num_val = host_header.seq_num + data_len;
+                    sprintf(log_msg, "SND ACK=%u WIN=%u", ack_num_val, available_buffer_size);
+                    log_event(log_msg, log_file);
+
+                    ack_response.flags = htons(ACK);
+                    ack_response.ack_num = htonl(ack_num_val);
+                    ack_response.window_size = htons(available_buffer_size);
 
                     sendto(socket, &ack_response, sizeof(ack_response), 0, (struct sockaddr *)addr, sizeof(*addr));
-                    sprintf(log_msg, "SND ACK=%u WIN=%u", ack_response.ack_num, ack_response.window_size);
-                    log_event(log_msg, log_file);
                 }
             }
         }
@@ -559,14 +675,15 @@ int chat_mode_fn(int socket, struct sockaddr_in *addr)
             if (elapsed_ms > RTO)
             {
                 // printf("Timeout, retransmitting message...\n");
+                uint32_t retrans_seq_num = ntohl(unacked_packet.packet.header.seq_num);
 
-                sprintf(log_msg, "TIMEOUT SEQ=%u", unacked_packet.packet.header.seq_num);
+                sprintf(log_msg, "TIMEOUT SEQ=%u", retrans_seq_num);
                 log_event(log_msg, log_file);
 
                 // Retransmit the stored packet
                 sendto(socket, &unacked_packet.packet, sizeof(sham_header) + unacked_packet.actual_data_length, 0, (struct sockaddr *)addr, sizeof(*addr));
 
-                sprintf(log_msg, "RETX DATA SEQ=%u LEN=%zu", unacked_packet.packet.header.seq_num, unacked_packet.actual_data_length);
+                sprintf(log_msg, "RETX DATA SEQ=%u LEN=%zu", retrans_seq_num, unacked_packet.actual_data_length);
                 log_event(log_msg, log_file);
 
                 // Reset the timer for the retransmitted packet
