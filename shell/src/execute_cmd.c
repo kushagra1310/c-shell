@@ -257,7 +257,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         {
             if (file_input == -2)
             {
-                fprintf(stderr,"No such file or directory\n");
+                fprintf(stderr,"No such file or directory!\n");
                 vector_clear(to_be_passed);
             }
             int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size - 1].job_number + 1) : 1;
@@ -393,7 +393,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
     {
         if (file_input == -2)
         {
-            printf("No such file or directory\n");
+            printf("No such file or directory!\n");
             vector_clear(to_be_passed);
         }
         if (strcmp(((string_t *)to_be_passed->data)[0].data, "hop") == 0 || strcmp(((string_t *)to_be_passed->data)[0].data, "log") == 0)
