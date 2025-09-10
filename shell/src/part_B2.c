@@ -147,6 +147,11 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
         string_t temp = ((string_t *)token_list->data)[x_pointer];
         if (!strcmp(temp.data, "-"))
         {
+            if (x_pointer < (int)token_list->size - 1)
+            {
+                printf("reveal: Invalid Syntax!\n");
+                return; // there should at most be one directory argument
+            }
             d = opendir(prev_dir);
             if (d == NULL)
             {
@@ -159,6 +164,11 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
         }
         else if (!strcmp(temp.data, "."))
         {
+            if (x_pointer < (int)token_list->size - 1)
+            {
+                printf("reveal: Invalid Syntax!\n");
+                return; // there should at most be one directory argument
+            }
             d = opendir(cur_dir);
             if (d == NULL)
             {
@@ -171,6 +181,11 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
         }
         else if (!strcmp(temp.data, "~"))
         {
+            if (x_pointer < (int)token_list->size - 1)
+            {
+                printf("reveal: Invalid Syntax!\n");
+                return; // there should at most be one directory argument
+            }
             d = opendir(home_dir);
             if (d == NULL)
             {
@@ -183,10 +198,14 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
         }
         else if (!strcmp(temp.data, ".."))
         {
-
+            if (x_pointer < (int)token_list->size - 1)
+            {
+                printf("reveal: Invalid Syntax!\n");
+                return; // there should at most be one directory argument
+            }
             char parent[4097];
             strcpy(parent, cur_dir);
-            char *last_slash = strrchr(parent, '/');
+            char *last_slash = strrchr(parent, '/'); // last / in the path
 
             if (last_slash != NULL && last_slash != parent)
             {
@@ -204,23 +223,25 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
         }
         else if (temp.data[0] == '-')
         {
-            if (strchr(temp.data, 'l') && strchr(temp.data, 'a'))
+            for (int j = 1; temp.data[j] != '\0'; j++)
             {
-                l_flag = 1;
-                a_flag = 1;
-            }
-            else if (strchr(temp.data, 'l'))
-            {
-                // x_pointer++;
-                l_flag = 1;
-            }
-            else if (strchr(temp.data, 'a'))
-            {
-                // x_pointer++;
-                a_flag = 1;
+                if (temp.data[j] == 'l')
+                {
+                    l_flag = 1;
+                }
+                else if (temp.data[j] == 'a')
+                {
+                    a_flag = 1;
+                }
+                else
+                {
+                    // if character is not 'a' or 'l', invalid flag.
+                    printf("reveal: Invalid Syntax!\n");
+                    return;
+                }
             }
             x_pointer++;
-            if (x_pointer == (int)token_list->size)
+            if (x_pointer == (int)token_list->size) // reached end without any other filename or argument so home directory default
             {
                 d = opendir(home_dir);
                 if (d == NULL)
@@ -245,7 +266,7 @@ void reveal_function(vector_t *token_list, char *home_dir, char *prev_dir)
         }
         else
         {
-            printf("Incorrect syntax for reveal!\n");
+            printf("reveal: Invalid Syntax!\n");
             break;
         }
     }
