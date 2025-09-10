@@ -1,1 +1,15 @@
-"line1\nline2\nline3"
+b
+debug.log
+file2.txt
+include
+input.txt
+llm_completions
+Makefile
+output.txt
+__pycache__
+requirements.txt
+shell.out
+shell.tcl
+src
+test.py
+test.txt

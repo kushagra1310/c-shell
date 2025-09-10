@@ -19,6 +19,7 @@ int pipe_function(char *inp, vector_t *to_be_passed, char *home_dir, char *prev_
     // Set the group process id
     if (rc == 0)
     {
+        // printf("[DEBUG] child input: %d",file_input);
         if (setpgid(0, *pgid) < 0)
         {
             perror("setpgid failed");

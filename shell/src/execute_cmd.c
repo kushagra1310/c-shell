@@ -100,9 +100,9 @@ int decide_and_call(char *inp, vector_t *to_be_passed, char *home_dir, char *pre
         args[args_count] = NULL;
         execvp(args[0], args);
         // perror("exec failed");
-        if(errno==ENOENT)
+        if (errno == ENOENT)
         {
-            fprintf(stderr,"Command not found!\n");
+            fprintf(stderr, "Command not found!\n");
         }
         return 1;
     }
@@ -138,7 +138,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         {
             if (x_pointer < (int)token_list->size)
             {
-                if(file_input==-2)
+                if (file_input == -2)
                     break;
                 temp = ((string_t *)token_list->data)[x_pointer++];
                 if (file_input != -1)
@@ -199,13 +199,21 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                 }
                 file_output = open(temp.data, O_WRONLY | O_APPEND | O_CREAT, 0666);
 
-                if (dup2(file_output, STDOUT_FILENO) == -1)
+                if (file_output == -1)
                 {
-                    perror("dup2 failed for append");
-                    close(file_output);
-                    file_output = -1;
+                    perror("open failed for append output");
                     continue;
                 }
+
+                // if (dup2(file_output, STDOUT_FILENO) == -1)
+                // {
+                //     perror("dup2 failed for append");
+                //     close(file_output);
+                //     file_output = -1;
+                //     continue;
+                // }
+                // close(file_output);
+                // file_output=-1;
             }
         }
         else if (!strcmp(temp.data, ";"))
@@ -235,6 +243,8 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                         close(file_input);
                         file_input = -2;
                     }
+                    close(file_input);
+                    file_input = -1;
                     if (file_output != -1 && file_output != -2 && dup2(file_output, STDOUT_FILENO) == -1)
                     {
                         perror("dup2 failed for output");
@@ -242,6 +252,9 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                         file_output = -1;
                         // continue;
                     }
+                    close(file_output);
+                    file_output = -1;
+
                     decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
                     exit(0);
                 }
@@ -257,7 +270,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
         {
             if (file_input == -2)
             {
-                fprintf(stderr,"No such file or directory!\n");
+                fprintf(stderr, "No such file or directory!\n");
                 vector_clear(to_be_passed);
             }
             int new_job_no = (bg_job_list->size) ? (((bg_job *)bg_job_list->data)[bg_job_list->size - 1].job_number + 1) : 1;
@@ -288,6 +301,15 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     dup2(dev_null_fd, STDIN_FILENO); // point stdin to /dev/null to avoid terminal access for input
                     close(dev_null_fd);
                 }
+
+                if (file_input != -1 && file_input != -2 && dup2(file_input, STDIN_FILENO) == -1)
+                {
+                    perror("dup2 failed for input");
+                    exit(1);
+                }
+                if (file_input > 0)
+                    close(file_input);
+
                 if (file_output != -1 && file_output != -2 && dup2(file_output, STDOUT_FILENO) == -1)
                 {
                     perror("dup2 failed for output");
@@ -295,6 +317,9 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     file_output = -1;
                     // continue;
                 }
+                close(file_output);
+                file_output = -1;
+
                 // ############## LLM Generated Code Ends ##############
                 if (!decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log))
                 {
@@ -307,7 +332,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             }
 
             setpgid(rc, rc);
-            
+
             file_output = -1;
             file_input = -1;
             bg_job *current_job = malloc(sizeof(bg_job));
@@ -316,7 +341,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             current_job->pid = rc;
             current_job->state = strdup("Running");
             vector_push_back(bg_job_list, current_job);
-            fprintf(stderr,"[%d] %d\n", new_job_no, rc);
+            fprintf(stderr, "[%d] %d\n", new_job_no, rc);
             vector_clear(to_be_passed);
         }
         else if (!strcmp(temp.data, "|"))
@@ -324,6 +349,7 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
             int pipe_fd[2];
             pipe(pipe_fd);
             fg_job *pipe_job = NULL;
+            // printf("[DEBUG]: input: %d",file_input);
             if (pipe_function(inp, to_be_passed, home_dir, prev_dir, log_list, pipe_fd, pids, bg_job_list, should_log, &current_pgid, &pipe_job, file_input, file_output) == 0)
             {
                 // LLM
@@ -423,6 +449,8 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     close(file_input);
                     file_input = -2;
                 }
+                close(file_input);
+                file_input = -1;
                 if (file_output != -1 && file_output != -2 && dup2(file_output, STDOUT_FILENO) == -1)
                 {
                     perror("dup2 failed for output");
@@ -430,6 +458,8 @@ int execute_cmd(char *inp, char *home_dir, char *prev_dir, Queue *log_list, vect
                     file_output = -1;
                     // continue;
                 }
+                close(file_output);
+                file_output = -1;
                 decide_and_call(inp, to_be_passed, home_dir, prev_dir, log_list, bg_job_list, should_log);
                 exit(0);
             }
