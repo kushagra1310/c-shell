@@ -3,7 +3,7 @@
 #include "../include/stringlib.h"
 #include "../include/queue.h"
 #include "../include/shell.h"
-extern char* log_file_name;
+extern char *log_file_name;
 void log_add(char *inp, Queue *log_list)
 {
     // FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "r");
@@ -97,7 +97,7 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
     {
         if ((int)token_list->size > 3)
         {
-            printf("Empty/Invalid command %d arguments\n", (int)token_list->size);
+            printf("log: Invalid Syntax!\n");
             return;
         }
 
@@ -107,10 +107,17 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
             if (!strcmp(temp.data, "purge"))
             {
                 // FILE *log_file = fopen("/home/kushagra-agrawal/Desktop/osn/mini-project-1-kushagra1310/shell/src/log_file.txt", "w");
-                FILE *log_file = fopen(log_file_name, "w");
-                fclose(log_file);
-                while (!queue_is_empty(log_list))
-                    dequeue(log_list);
+                if (token_list->size == 2)
+                {
+                    FILE *log_file = fopen(log_file_name, "w");
+                    fclose(log_file);
+                    while (!queue_is_empty(log_list))
+                        dequeue(log_list);
+                }
+                else
+                {
+                    printf("log: Invalid Syntax!\n");
+                }
             }
             else if (!strcmp(temp.data, "execute"))
             {
@@ -136,7 +143,7 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
                         }
                         rewind(log_file);
                         char command_to_execute[LINE_MAX];
-                        for (int i = 0; i < total_lines-index+1; i++)
+                        for (int i = 0; i < total_lines - index + 1; i++)
                         {
                             if (fgets(command_to_execute, sizeof(command_to_execute), log_file) == NULL)
                             {
@@ -146,15 +153,19 @@ void log_function(vector_t *token_list, char *inp, char *prev_dir, char *home_di
                             }
                         }
                         fclose(log_file);
-                        command_to_execute[strcspn(command_to_execute, "\n")]='\0';
+                        command_to_execute[strcspn(command_to_execute, "\n")] = '\0';
                         // printf("executing: %s\n",command_to_execute);
                         execute_cmd(command_to_execute, home_dir, prev_dir, log_list, bg_job_list, false);
                     }
                 }
+                else
+                {
+                    printf("log: Invalid Syntax!\n");
+                }
             }
             else
             {
-                printf("Invalid log request\n");
+                printf("log: Invalid Syntax!\n");
                 return;
             }
         }
