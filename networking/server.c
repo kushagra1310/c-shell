@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <openssl/evp.h>
 #include "sham.h"
 #include <openssl/evp.h>
 #include <stdio.h>
@@ -268,22 +267,21 @@ int sham_end(int socketfd, struct sockaddr_in *addr_in)
 void print_md5sum(const char *filename)
 {
     FILE *fp = fopen(filename, "rb");
-    if (!fp)
-    {
-        perror("fopen");
+    if (!fp) {
+        perror("Error opening file");
         return;
     }
 
+    // 1. Create a NEW context for this specific file.
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
-    if (!mdctx)
-    {
+    if (!mdctx) {
         fprintf(stderr, "EVP_MD_CTX_new failed\n");
         fclose(fp);
         return;
     }
 
-    if (EVP_DigestInit_ex(mdctx, EVP_md5(), NULL) != 1)
-    {
+    // 2. Initialize the context for an MD5 operation.
+    if (EVP_DigestInit_ex(mdctx, EVP_md5(), NULL) != 1) {
         fprintf(stderr, "EVP_DigestInit_ex failed\n");
         EVP_MD_CTX_free(mdctx);
         fclose(fp);
@@ -292,10 +290,9 @@ void print_md5sum(const char *filename)
 
     unsigned char buffer[4096];
     size_t bytes;
-    while ((bytes = fread(buffer, 1, sizeof(buffer), fp)) > 0)
-    {
-        if (EVP_DigestUpdate(mdctx, buffer, bytes) != 1)
-        {
+    while ((bytes = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+        // 3. Update the context with file data.
+        if (EVP_DigestUpdate(mdctx, buffer, bytes) != 1) {
             fprintf(stderr, "EVP_DigestUpdate failed\n");
             EVP_MD_CTX_free(mdctx);
             fclose(fp);
@@ -305,21 +302,21 @@ void print_md5sum(const char *filename)
 
     unsigned char md_value[EVP_MAX_MD_SIZE];
     unsigned int md_len;
-    if (EVP_DigestFinal_ex(mdctx, md_value, &md_len) != 1)
-    {
+    
+    // 4. Finalize the hash. After this, the context is "spent".
+    if (EVP_DigestFinal_ex(mdctx, md_value, &md_len) != 1) {
         fprintf(stderr, "EVP_DigestFinal_ex failed\n");
         EVP_MD_CTX_free(mdctx);
         fclose(fp);
         return;
     }
 
+    // 5. Clean up the context used for this file.
     EVP_MD_CTX_free(mdctx);
     fclose(fp);
 
-    // Print in required format
     printf("MD5: ");
-    for (unsigned int i = 0; i < md_len; i++)
-    {
+    for (unsigned int i = 0; i < md_len; i++) {
         printf("%02x", md_value[i]);
     }
     printf("\n");
@@ -359,7 +356,10 @@ int receive_file(int socket, struct sockaddr_in *addr, char *output_filename)
         if (host_header.flags & FIN)
         {
             if (sham_end_recieve(socket, packet, addr) == -1)
+            {
+                fclose(file);   
                 return 0;
+            }
         }
         else
         {
