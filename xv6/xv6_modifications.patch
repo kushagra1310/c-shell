@@ -1,607 +1,612 @@
-diff --git a/Makefile b/Makefile
-index 2d5f9e4..1e96f3d 100644
---- a/Makefile
-+++ b/Makefile
-@@ -59,7 +59,16 @@ LD = $(TOOLPREFIX)ld
- OBJCOPY = $(TOOLPREFIX)objcopy
- OBJDUMP = $(TOOLPREFIX)objdump
- 
--CFLAGS = -Wall -Werror -Wno-unknown-attributes -O -fno-omit-frame-pointer -ggdb -gdwarf-2
-+ifeq ($(SCHEDULER),FCFS)
-+CFLAGS += -DFCFS
-+endif
-+
-+ifeq ($(SCHEDULER),CFS)
-+CFLAGS += -DCFS
-+endif
-+
-+CFLAGS += -Wall -Werror -O -fno-omit-frame-pointer -ggdb
-+
- CFLAGS += -MD
- CFLAGS += -mcmodel=medany
- CFLAGS += -ffreestanding
-@@ -142,6 +151,9 @@ UPROGS=\
- 	$U/_logstress\
- 	$U/_forphan\
- 	$U/_dorphan\
-+	$U/_readcount\
-+	$U/_schedulertest\
-+	$U/_sched_demo\
- 
- fs.img: mkfs/mkfs README $(UPROGS)
- 	mkfs/mkfs fs.img README $(UPROGS)
-diff --git a/kernel/defs.h b/kernel/defs.h
-index 122d9ca..5b01324 100644
---- a/kernel/defs.h
-+++ b/kernel/defs.h
-@@ -180,6 +180,8 @@ void            plic_complete(int);
- void            virtio_disk_init(void);
- void            virtio_disk_rw(struct buf *, int);
- void            virtio_disk_intr(void);
-+// readcount/c
-+uint64 sys_getreadcount(void);
- 
- // number of elements in fixed-size array
- #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
-diff --git a/kernel/proc.c b/kernel/proc.c
-index 9d6cf3f..2472a0a 100644
---- a/kernel/proc.c
-+++ b/kernel/proc.c
-@@ -19,6 +19,8 @@ extern void forkret(void);
- static void freeproc(struct proc *p);
- 
- extern char trampoline[]; // trampoline.S
-+uint64 debug_count=0;
-+// static int sched_decision_count = 0;
- 
- // helps ensure that wakeups of wait()ing
- // parents are not lost. helps obey the
-@@ -29,6 +31,19 @@ struct spinlock wait_lock;
- // Allocate a page for each process's kernel stack.
- // Map it high in memory, followed by an invalid
- // guard page.
-+// LLM generated
-+static const int weights[40] = {
-+    88761, 71755, 56364, 46273, 36291, // nice -20 to -16
-+    29154, 23254, 18705, 14949, 11916, // nice -15 to -11
-+    9548, 7620, 6100, 4904, 3906,      // nice -10 to -6
-+    3121, 2501, 1991, 1586, 1277,      // nice -5 to -1
-+    1024, 820, 655, 526, 423,          // nice 0 to 4
-+    335, 272, 215, 172, 137,           // nice 5 to 9
-+    110, 87, 70, 56, 45,               // nice 10 to 14
-+    36, 29, 23, 18, 15                // nice 15 to 19
-+};
-+// LLM generated
-+
- void
- proc_mapstacks(pagetable_t kpgtbl)
- {
-@@ -145,7 +160,12 @@ found:
-   memset(&p->context, 0, sizeof(p->context));
-   p->context.ra = (uint64)forkret;
-   p->context.sp = p->kstack + PGSIZE;
--
-+  p->arrive_time=ticks; // allocating arriving time for fcfs
-+  p->nice_value=0;
-+  p->weight=weights[p->nice_value+20];
-+  p->vruntime=0;
-+  p->time_slice=3;
-+  p->ticks_so_far=0;
-   return p;
- }
- 
-@@ -418,6 +438,8 @@ kwait(uint64 addr)
- //  - swtch to start running that process.
- //  - eventually that process transfers control
- //    via swtch back to the scheduler.
-+// The scheduler picks a process to run on this CPU.
-+// Choice depends on the policy selected at compile time (FCFS or CFS).
- void
- scheduler(void)
- {
-@@ -426,36 +448,124 @@ scheduler(void)
- 
-   c->proc = 0;
-   for(;;){
--    // The most recent process to run may have had interrupts
--    // turned off; enable them to avoid a deadlock if all
--    // processes are waiting. Then turn them back off
--    // to avoid a possible race between an interrupt
--    // and wfi.
-+    // printf("debug: %lu\n",debug_count++);
-+    // Enable interrupts on this CPU, then disable again while choosing
-     intr_on();
-     intr_off();
-+#ifdef FCFS
-+    
-+    struct proc *earliest = 0;
-+    for (p = proc; p < &proc[NPROC]; p++)
-+    {
-+      acquire(&p->lock);
-+      if (p->state == RUNNABLE)
-+      {
-+        if (earliest == 0 || p->arrive_time < earliest->arrive_time)
-+          earliest = p;
-+      }
-+      release(&p->lock);
-+    }
-+    // iterating through the process array to find the job that arrived the earliest
-+    if (earliest)
-+    {
-+      acquire(&earliest->lock);
-+      if (earliest->state == RUNNABLE)
-+      {
-+        earliest->state = RUNNING;
-+        c->proc = earliest;
-+
-+        swtch(&c->context, &earliest->context);
-+
-+        c->proc = 0;
-+      }
-+      release(&earliest->lock);
-+    }
-+    // executing the earliest job
-+#elif defined(CFS)
-+    struct proc *chosen = 0;
-+    int runnable_count = 0;
-+
-+    // picking the runnable process with the smallest vruntime
-+    for (p = proc; p < &proc[NPROC]; p++)
-+    {
-+      acquire(&p->lock);
-+      if (p->state == RUNNABLE)
-+      {
-+        runnable_count++;
-+        if (chosen == 0 || p->vruntime < chosen->vruntime)
-+          chosen = p;
-+      }
-+      release(&p->lock);
-+    }
-+
-+    if (chosen)
-+    {
-+      int target_latency = 48;     // pretend latency (ticks)
-+      int min_granularity = 3;     // least time slice
-+      int slice = target_latency;
-+      // sched_decision_count++;
-+      if (runnable_count > 0)
-+      {
-+        int fair_share = target_latency / runnable_count;
-+        slice = (fair_share > min_granularity) ? fair_share : min_granularity;
-+      }
-+
-+      
-+      // Logging for report
-+      //  printf("[Scheduling Decision %d]\n", sched_decision_count);
-+      // printf("\n[Scheduler Tick]\n");
-+      // for (p = proc; p < &proc[NPROC]; p++) {
-+      //   acquire(&p->lock);
-+      //   if (p->state == RUNNABLE)
-+      //     printf("PID %d | vRuntime %d\n", p->pid, p->vruntime);
-+      //   release(&p->lock);
-+      // }
-+      // // printf("tick no.: %d, runnable processes: %d\n",ticks,runnable_count);
-+      // printf("--> Scheduling PID %d for %d ticks (lowest vRuntime)\n\n", chosen->pid, slice);
-+
-+      acquire(&chosen->lock);
-+      if (chosen->state == RUNNABLE)
-+      {
-+        chosen->ticks_so_far = 0;
-+        chosen->time_slice = slice;
-+        chosen->state = RUNNING;
-+        c->proc = chosen;
-+
-+        swtch(&c->context, &chosen->context);
- 
-+        c->proc = 0;
-+      }
-+      release(&chosen->lock);
-+    }
-+    else
-+    {
-+      asm volatile("wfi");
-+    }
-+
-+
-+#else
-+    // --- Default round-robin scheduler (original xv6) ---
-     int found = 0;
--    for(p = proc; p < &proc[NPROC]; p++) {
-+    for (p = proc; p < &proc[NPROC]; p++) {
-       acquire(&p->lock);
--      if(p->state == RUNNABLE) {
--        // Switch to chosen process.  It is the process's job
--        // to release its lock and then reacquire it
--        // before jumping back to us.
-+      if (p->state == RUNNABLE) {
-         p->state = RUNNING;
-         c->proc = p;
-+
-         swtch(&c->context, &p->context);
- 
--        // Process is done running for now.
--        // It should have changed its p->state before coming back.
-         c->proc = 0;
-         found = 1;
-       }
-       release(&p->lock);
-     }
--    if(found == 0) {
--      // nothing to run; stop running on this core until an interrupt.
-+    if (found == 0) {
-+      // nothing to run; stop until an interrupt
-       asm volatile("wfi");
-     }
-+
-+    
-+#endif
-   }
- }
- 
-@@ -494,6 +604,7 @@ yield(void)
-   acquire(&p->lock);
-   p->state = RUNNABLE;
-   sched();
-+  // p->vruntime+=(1024*100)/p->weight; // *100 so that cases where decimal time is there get handled properly
-   release(&p->lock);
- }
- 
-diff --git a/kernel/proc.h b/kernel/proc.h
-index d021857..5c4d79d 100644
---- a/kernel/proc.h
-+++ b/kernel/proc.h
-@@ -29,7 +29,7 @@ struct cpu {
- extern struct cpu cpus[NCPU];
- 
- // per-process data for the trap handling code in trampoline.S.
--// sits in a page by itself just under the trampoline page in the
-+// sits in a page by itself just under the trampoli ne page in the
- // user page table. not specially mapped in the kernel page table.
- // uservec in trampoline.S saves user registers in the trapframe,
- // then initializes registers from the trapframe's
-@@ -104,4 +104,10 @@ struct proc {
-   struct file *ofile[NOFILE];  // Open files
-   struct inode *cwd;           // Current directory
-   char name[16];               // Process name (debugging)
-+  uint64 arrive_time; 
-+  int nice_value;              // nice value
-+  int weight;                  // weight of process
-+  int vruntime;                // virtual runtime
-+  int ticks_so_far;
-+  int time_slice;
- };
-diff --git a/kernel/syscall.c b/kernel/syscall.c
-index 076d965..be7c6c9 100644
---- a/kernel/syscall.c
-+++ b/kernel/syscall.c
-@@ -101,6 +101,7 @@ extern uint64 sys_unlink(void);
- extern uint64 sys_link(void);
- extern uint64 sys_mkdir(void);
- extern uint64 sys_close(void);
-+extern uint64 sys_getreadcount(void);
- 
- // An array mapping syscall numbers from syscall.h
- // to the function that handles the system call.
-@@ -126,6 +127,7 @@ static uint64 (*syscalls[])(void) = {
- [SYS_link]    sys_link,
- [SYS_mkdir]   sys_mkdir,
- [SYS_close]   sys_close,
-+[SYS_getreadcount] sys_getreadcount
- };
- 
- void
-diff --git a/kernel/syscall.h b/kernel/syscall.h
-index 3dd926d..0cf477a 100644
---- a/kernel/syscall.h
-+++ b/kernel/syscall.h
-@@ -20,3 +20,4 @@
- #define SYS_link   19
- #define SYS_mkdir  20
- #define SYS_close  21
-+#define SYS_getreadcount 22
-diff --git a/kernel/sysfile.c b/kernel/sysfile.c
-index d8234ce..7e7c092 100644
---- a/kernel/sysfile.c
-+++ b/kernel/sysfile.c
-@@ -16,6 +16,7 @@
- #include "file.h"
- #include "fcntl.h"
- 
-+uint64 readcount=0;
- // Fetch the nth word-sized system call argument as a file descriptor
- // and return both the descriptor and the corresponding struct file.
- static int
-@@ -76,7 +77,12 @@ sys_read(void)
-   argint(2, &n);
-   if(argfd(0, 0, &f) < 0)
-     return -1;
--  return fileread(f, p, n);
-+  n=fileread(f, p, n);
-+  if(n>0)
-+  {
-+    readcount+=n;
-+  }
-+  return n;
- }
- 
- uint64
-diff --git a/kernel/sysproc.c b/kernel/sysproc.c
-index 3044d00..b8d7f94 100644
---- a/kernel/sysproc.c
-+++ b/kernel/sysproc.c
-@@ -7,6 +7,8 @@
- #include "proc.h"
- #include "vm.h"
- 
-+extern uint64 readcount;
-+
- uint64
- sys_exit(void)
- {
-@@ -105,3 +107,9 @@ sys_uptime(void)
-   release(&tickslock);
-   return xticks;
- }
-+
-+uint64
-+sys_getreadcount(void)
-+{
-+  return readcount;
-+}
-diff --git a/kernel/trap.c b/kernel/trap.c
-index a41cd69..bccc579 100644
---- a/kernel/trap.c
-+++ b/kernel/trap.c
-@@ -80,10 +80,28 @@ usertrap(void)
-   if(killed(p))
-     kexit(-1);
- 
--  // give up the CPU if this is a timer interrupt.
--  if(which_dev == 2)
-+    
-+  #ifdef CFS
-+   p=myproc();
-+  //  if(p!=0)
-+  //  printf("TRAP_CHECK: PID=%d, ticks_ran=%d, slice=%d, vruntime= %d\n",
-+  //        p->pid, p->ticks_so_far, p->time_slice, p->vruntime);
-+   if(which_dev == 2 && p != 0 && p->ticks_so_far >= p->time_slice)
-+   {
-+    //  panic("I'm panicking 89\n");
-+    // printf("[DEBUG] 88 ticks done: %d, time slice: %d\n", p->ticks_so_far, p->time_slice);
-     yield();
--
-+   }
-+  #elif defined(FCFS)
-+  // do nothing for FCFS
-+  #else
-+   // give up the CPU if this is a timer interrupt.
-+   if(which_dev == 2)
-+    {
-+      // panic("[DEBUG] 95\n");
-+      yield();
-+    }
-+  #endif
-   prepare_return();
- 
-   // the user page table to switch to, for trampoline.S
-@@ -151,10 +169,28 @@ kerneltrap()
-     panic("kerneltrap");
-   }
- 
-+  #ifdef CFS
-+  struct proc* p=myproc();
-+  // if(p!=0)
-+  //   printf("TRAP_CHECK: PID=%d, ticks_ran=%d, slice=%d, vruntime=%d\n",
-+  //            p->pid, p->ticks_so_far, p->time_slice, p->vruntime);
-+  if(which_dev == 2 && p != 0 && p->ticks_so_far >= p->time_slice)
-+  {
-+    // printf("[DEBUG] ticks done: %d, time slice: %d\n", p->ticks_so_far, p->time_slice);
-+    // panic("171\n");
-+    yield();
-+  }
-+  #elif defined(FCFS)
-+  // do nothing if FCFS
-+  #else
-   // give up the CPU if this is a timer interrupt.
-   if(which_dev == 2 && myproc() != 0)
-+  {
-+    // panic("[DEBUG] 177\n");
-     yield();
-+  }
- 
-+  #endif
-   // the yield() may have caused some traps to occur,
-   // so restore trap registers for use by kernelvec.S's sepc instruction.
-   w_sepc(sepc);
-@@ -164,6 +200,7 @@ kerneltrap()
- void
- clockintr()
- {
-+  // panic("SUCCESS: clockintr() was called!");
-   if(cpuid() == 0){
-     acquire(&tickslock);
-     ticks++;
-@@ -171,6 +208,18 @@ clockintr()
-     release(&tickslock);
-   }
- 
-+  #ifdef CFS
-+  // printf("CLOCKINTR CALLED! ticks=%d\n", ticks);
-+  struct proc *p=myproc();
-+
-+  if(p!=0 && p->state == RUNNING)
-+  {
-+    // panic("[DEBUG] I'm being called\n");
-+    p->vruntime+=(1024*100)/p->weight; // *100 so that cases where decimal time is there get handled properly
-+    p->ticks_so_far++;
-+  }
-+  // struct proc *p = myproc();
-+  #endif
-   // ask for the next timer interrupt. this also clears
-   // the interrupt request. 1000000 is about a tenth
-   // of a second.
-diff --git a/user/readcount.c b/user/readcount.c
-new file mode 100644
-index 0000000..7637e26
---- /dev/null
-+++ b/user/readcount.c
-@@ -0,0 +1,23 @@
-+#include "kernel/types.h"
-+#include "kernel/stat.h"
-+#include "user/user.h"
-+int main(int argc, char* argv[])
-+{
-+    int fd;
-+    char buf[100];
-+
-+    uint64 before=getreadcount();
-+    printf("Initial readcount: %lu\n",before);
-+    fd=open("../README",0); // 0= O_RDONLY in xv6
-+
-+    if(fd<0)
-+    {
-+        printf("cannot open file\n");
-+        exit(1);
-+    }
-+
-+    int n=read(fd,buf,100);
-+    if(n>0)
-+    printf("After readcount: %lu\n", getreadcount());
-+    return 0;
-+}
-\ No newline at end of file
-diff --git a/user/sched_demo.c b/user/sched_demo.c
-new file mode 100644
-index 0000000..21c2017
---- /dev/null
-+++ b/user/sched_demo.c
-@@ -0,0 +1,74 @@
-+#include "kernel/types.h"
-+#include "kernel/stat.h"
-+#include "user/user.h"
-+
-+// Simple delay function using uptime() - works reliably in RISC-V xv6
-+void delay(int ticks) {
-+    int start = uptime();
-+    while (uptime() - start < ticks) {
-+        // Busy wait - this ensures we don't interfere with scheduler testing
-+    }
-+}
-+
-+void simple_worker(char id) {
-+    int start = uptime();
-+    int count = 0;
-+    
-+    printf("Process %c starting at time %d\n", id, start);
-+    
-+    // Run for about 50 ticks
-+    while (uptime() - start < 50) {
-+        // Print our ID every so often to show when we're running
-+        if (count % 5000 == 0) {
-+            printf("%c", id);
-+        }
-+        count++;
-+        
-+        // Small amount of work
-+        volatile int dummy = 0;
-+        for (int i = 0; i < 100; i++) {
-+            dummy += i;
-+        }
-+    }
-+    
-+    printf("\nProcess %c finished (count: %d) at time %d\n", id, count, uptime());
-+}
-+
-+int main() {
-+    printf("Simple scheduler test - watch the output pattern:\n");
-+    printf("FCFS should show: AAA...BBB...CCC...\n");
-+    printf("Round Robin should show: ABCABC...\n");
-+    printf("CFS should show: fair distribution\n\n");
-+    
-+    int start_time = uptime();
-+    printf("Test starting at time %d\n", start_time);
-+    
-+    // Create 3 processes with slight delays
-+    if (fork() == 0) {
-+        simple_worker('A');
-+        exit(0);
-+    }
-+    
-+    delay(2); // Use our delay function instead of sleep
-+    
-+    if (fork() == 0) {
-+        simple_worker('B'); 
-+        exit(0);
-+    }
-+    
-+    delay(2);
-+    
-+    if (fork() == 0) {
-+        simple_worker('C');
-+        exit(0);
-+    }
-+    
-+    // Wait for all children
-+    wait(0);
-+    wait(0);
-+    wait(0);
-+    
-+    printf("\n\nTest completed at time %d!\n", uptime());
-+    printf("Total test duration: %d ticks\n", uptime() - start_time);
-+    return 0;
-+}
-\ No newline at end of file
-diff --git a/user/schedulertest.c b/user/schedulertest.c
-new file mode 100644
-index 0000000..786a044
---- /dev/null
-+++ b/user/schedulertest.c
-@@ -0,0 +1,27 @@
-+#include "kernel/types.h"
-+#include "kernel/stat.h"
-+#include "user/user.h"
-+#include "kernel/fcntl.h"
-+
-+#define NFORK 10
-+#define IO 5
-+
-+int main() {
-+  int n, pid;
-+  
-+  for (n = 0; n < NFORK; n++) {
-+    pid = fork();
-+    if (pid < 0)
-+      break;
-+    if (pid == 0) {
-+      if (n < IO) {
-+        // sleep(200); // IO-bound process
-+      } else {
-+        for (volatile int i = 0; i < 1000000000; i++) {} // CPU-bound process
-+      }
-+      // printf("\nProcess %d finished\n", n);
-+      exit(0);
-+    }
-+  }
-+  exit(0);
-+}
-diff --git a/user/user.h b/user/user.h
-index ac84de9..028f274 100644
---- a/user/user.h
-+++ b/user/user.h
-@@ -24,6 +24,7 @@ int getpid(void);
- char* sys_sbrk(int,int);
- int pause(int);
- int uptime(void);
-+uint64 getreadcount(void);
- 
- // ulib.c
- int stat(const char*, struct stat*);
-diff --git a/user/usys.pl b/user/usys.pl
-index c5d4c3a..05223bf 100755
---- a/user/usys.pl
-+++ b/user/usys.pl
-@@ -42,3 +42,4 @@ entry("getpid");
- entry("sbrk");
- entry("pause");
- entry("uptime");
-+entry("getreadcount");
+diff --git a/xv6_modifications.patch b/xv6_modifications.patch
+index 0d2aaca..e69de29 100644
+--- a/xv6_modifications.patch
++++ b/xv6_modifications.patch
+@@ -1,607 +0,0 @@
+-diff --git a/Makefile b/Makefile
+-index 2d5f9e4..1e96f3d 100644
+---- a/Makefile
+-+++ b/Makefile
+-@@ -59,7 +59,16 @@ LD = $(TOOLPREFIX)ld
+- OBJCOPY = $(TOOLPREFIX)objcopy
+- OBJDUMP = $(TOOLPREFIX)objdump
+- 
+--CFLAGS = -Wall -Werror -Wno-unknown-attributes -O -fno-omit-frame-pointer -ggdb -gdwarf-2
+-+ifeq ($(SCHEDULER),FCFS)
+-+CFLAGS += -DFCFS
+-+endif
+-+
+-+ifeq ($(SCHEDULER),CFS)
+-+CFLAGS += -DCFS
+-+endif
+-+
+-+CFLAGS += -Wall -Werror -O -fno-omit-frame-pointer -ggdb
+-+
+- CFLAGS += -MD
+- CFLAGS += -mcmodel=medany
+- CFLAGS += -ffreestanding
+-@@ -142,6 +151,9 @@ UPROGS=\
+- 	$U/_logstress\
+- 	$U/_forphan\
+- 	$U/_dorphan\
+-+	$U/_readcount\
+-+	$U/_schedulertest\
+-+	$U/_sched_demo\
+- 
+- fs.img: mkfs/mkfs README $(UPROGS)
+- 	mkfs/mkfs fs.img README $(UPROGS)
+-diff --git a/kernel/defs.h b/kernel/defs.h
+-index 122d9ca..5b01324 100644
+---- a/kernel/defs.h
+-+++ b/kernel/defs.h
+-@@ -180,6 +180,8 @@ void            plic_complete(int);
+- void            virtio_disk_init(void);
+- void            virtio_disk_rw(struct buf *, int);
+- void            virtio_disk_intr(void);
+-+// readcount/c
+-+uint64 sys_getreadcount(void);
+- 
+- // number of elements in fixed-size array
+- #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+-diff --git a/kernel/proc.c b/kernel/proc.c
+-index 9d6cf3f..2472a0a 100644
+---- a/kernel/proc.c
+-+++ b/kernel/proc.c
+-@@ -19,6 +19,8 @@ extern void forkret(void);
+- static void freeproc(struct proc *p);
+- 
+- extern char trampoline[]; // trampoline.S
+-+uint64 debug_count=0;
+-+// static int sched_decision_count = 0;
+- 
+- // helps ensure that wakeups of wait()ing
+- // parents are not lost. helps obey the
+-@@ -29,6 +31,19 @@ struct spinlock wait_lock;
+- // Allocate a page for each process's kernel stack.
+- // Map it high in memory, followed by an invalid
+- // guard page.
+-+// LLM generated
+-+static const int weights[40] = {
+-+    88761, 71755, 56364, 46273, 36291, // nice -20 to -16
+-+    29154, 23254, 18705, 14949, 11916, // nice -15 to -11
+-+    9548, 7620, 6100, 4904, 3906,      // nice -10 to -6
+-+    3121, 2501, 1991, 1586, 1277,      // nice -5 to -1
+-+    1024, 820, 655, 526, 423,          // nice 0 to 4
+-+    335, 272, 215, 172, 137,           // nice 5 to 9
+-+    110, 87, 70, 56, 45,               // nice 10 to 14
+-+    36, 29, 23, 18, 15                // nice 15 to 19
+-+};
+-+// LLM generated
+-+
+- void
+- proc_mapstacks(pagetable_t kpgtbl)
+- {
+-@@ -145,7 +160,12 @@ found:
+-   memset(&p->context, 0, sizeof(p->context));
+-   p->context.ra = (uint64)forkret;
+-   p->context.sp = p->kstack + PGSIZE;
+--
+-+  p->arrive_time=ticks; // allocating arriving time for fcfs
+-+  p->nice_value=0;
+-+  p->weight=weights[p->nice_value+20];
+-+  p->vruntime=0;
+-+  p->time_slice=3;
+-+  p->ticks_so_far=0;
+-   return p;
+- }
+- 
+-@@ -418,6 +438,8 @@ kwait(uint64 addr)
+- //  - swtch to start running that process.
+- //  - eventually that process transfers control
+- //    via swtch back to the scheduler.
+-+// The scheduler picks a process to run on this CPU.
+-+// Choice depends on the policy selected at compile time (FCFS or CFS).
+- void
+- scheduler(void)
+- {
+-@@ -426,36 +448,124 @@ scheduler(void)
+- 
+-   c->proc = 0;
+-   for(;;){
+--    // The most recent process to run may have had interrupts
+--    // turned off; enable them to avoid a deadlock if all
+--    // processes are waiting. Then turn them back off
+--    // to avoid a possible race between an interrupt
+--    // and wfi.
+-+    // printf("debug: %lu\n",debug_count++);
+-+    // Enable interrupts on this CPU, then disable again while choosing
+-     intr_on();
+-     intr_off();
+-+#ifdef FCFS
+-+    
+-+    struct proc *earliest = 0;
+-+    for (p = proc; p < &proc[NPROC]; p++)
+-+    {
+-+      acquire(&p->lock);
+-+      if (p->state == RUNNABLE)
+-+      {
+-+        if (earliest == 0 || p->arrive_time < earliest->arrive_time)
+-+          earliest = p;
+-+      }
+-+      release(&p->lock);
+-+    }
+-+    // iterating through the process array to find the job that arrived the earliest
+-+    if (earliest)
+-+    {
+-+      acquire(&earliest->lock);
+-+      if (earliest->state == RUNNABLE)
+-+      {
+-+        earliest->state = RUNNING;
+-+        c->proc = earliest;
+-+
+-+        swtch(&c->context, &earliest->context);
+-+
+-+        c->proc = 0;
+-+      }
+-+      release(&earliest->lock);
+-+    }
+-+    // executing the earliest job
+-+#elif defined(CFS)
+-+    struct proc *chosen = 0;
+-+    int runnable_count = 0;
+-+
+-+    // picking the runnable process with the smallest vruntime
+-+    for (p = proc; p < &proc[NPROC]; p++)
+-+    {
+-+      acquire(&p->lock);
+-+      if (p->state == RUNNABLE)
+-+      {
+-+        runnable_count++;
+-+        if (chosen == 0 || p->vruntime < chosen->vruntime)
+-+          chosen = p;
+-+      }
+-+      release(&p->lock);
+-+    }
+-+
+-+    if (chosen)
+-+    {
+-+      int target_latency = 48;     // pretend latency (ticks)
+-+      int min_granularity = 3;     // least time slice
+-+      int slice = target_latency;
+-+      // sched_decision_count++;
+-+      if (runnable_count > 0)
+-+      {
+-+        int fair_share = target_latency / runnable_count;
+-+        slice = (fair_share > min_granularity) ? fair_share : min_granularity;
+-+      }
+-+
+-+      
+-+      // Logging for report
+-+      //  printf("[Scheduling Decision %d]\n", sched_decision_count);
+-+      // printf("\n[Scheduler Tick]\n");
+-+      // for (p = proc; p < &proc[NPROC]; p++) {
+-+      //   acquire(&p->lock);
+-+      //   if (p->state == RUNNABLE)
+-+      //     printf("PID %d | vRuntime %d\n", p->pid, p->vruntime);
+-+      //   release(&p->lock);
+-+      // }
+-+      // // printf("tick no.: %d, runnable processes: %d\n",ticks,runnable_count);
+-+      // printf("--> Scheduling PID %d for %d ticks (lowest vRuntime)\n\n", chosen->pid, slice);
+-+
+-+      acquire(&chosen->lock);
+-+      if (chosen->state == RUNNABLE)
+-+      {
+-+        chosen->ticks_so_far = 0;
+-+        chosen->time_slice = slice;
+-+        chosen->state = RUNNING;
+-+        c->proc = chosen;
+-+
+-+        swtch(&c->context, &chosen->context);
+- 
+-+        c->proc = 0;
+-+      }
+-+      release(&chosen->lock);
+-+    }
+-+    else
+-+    {
+-+      asm volatile("wfi");
+-+    }
+-+
+-+
+-+#else
+-+    // --- Default round-robin scheduler (original xv6) ---
+-     int found = 0;
+--    for(p = proc; p < &proc[NPROC]; p++) {
+-+    for (p = proc; p < &proc[NPROC]; p++) {
+-       acquire(&p->lock);
+--      if(p->state == RUNNABLE) {
+--        // Switch to chosen process.  It is the process's job
+--        // to release its lock and then reacquire it
+--        // before jumping back to us.
+-+      if (p->state == RUNNABLE) {
+-         p->state = RUNNING;
+-         c->proc = p;
+-+
+-         swtch(&c->context, &p->context);
+- 
+--        // Process is done running for now.
+--        // It should have changed its p->state before coming back.
+-         c->proc = 0;
+-         found = 1;
+-       }
+-       release(&p->lock);
+-     }
+--    if(found == 0) {
+--      // nothing to run; stop running on this core until an interrupt.
+-+    if (found == 0) {
+-+      // nothing to run; stop until an interrupt
+-       asm volatile("wfi");
+-     }
+-+
+-+    
+-+#endif
+-   }
+- }
+- 
+-@@ -494,6 +604,7 @@ yield(void)
+-   acquire(&p->lock);
+-   p->state = RUNNABLE;
+-   sched();
+-+  // p->vruntime+=(1024*100)/p->weight; // *100 so that cases where decimal time is there get handled properly
+-   release(&p->lock);
+- }
+- 
+-diff --git a/kernel/proc.h b/kernel/proc.h
+-index d021857..5c4d79d 100644
+---- a/kernel/proc.h
+-+++ b/kernel/proc.h
+-@@ -29,7 +29,7 @@ struct cpu {
+- extern struct cpu cpus[NCPU];
+- 
+- // per-process data for the trap handling code in trampoline.S.
+--// sits in a page by itself just under the trampoline page in the
+-+// sits in a page by itself just under the trampoli ne page in the
+- // user page table. not specially mapped in the kernel page table.
+- // uservec in trampoline.S saves user registers in the trapframe,
+- // then initializes registers from the trapframe's
+-@@ -104,4 +104,10 @@ struct proc {
+-   struct file *ofile[NOFILE];  // Open files
+-   struct inode *cwd;           // Current directory
+-   char name[16];               // Process name (debugging)
+-+  uint64 arrive_time; 
+-+  int nice_value;              // nice value
+-+  int weight;                  // weight of process
+-+  int vruntime;                // virtual runtime
+-+  int ticks_so_far;
+-+  int time_slice;
+- };
+-diff --git a/kernel/syscall.c b/kernel/syscall.c
+-index 076d965..be7c6c9 100644
+---- a/kernel/syscall.c
+-+++ b/kernel/syscall.c
+-@@ -101,6 +101,7 @@ extern uint64 sys_unlink(void);
+- extern uint64 sys_link(void);
+- extern uint64 sys_mkdir(void);
+- extern uint64 sys_close(void);
+-+extern uint64 sys_getreadcount(void);
+- 
+- // An array mapping syscall numbers from syscall.h
+- // to the function that handles the system call.
+-@@ -126,6 +127,7 @@ static uint64 (*syscalls[])(void) = {
+- [SYS_link]    sys_link,
+- [SYS_mkdir]   sys_mkdir,
+- [SYS_close]   sys_close,
+-+[SYS_getreadcount] sys_getreadcount
+- };
+- 
+- void
+-diff --git a/kernel/syscall.h b/kernel/syscall.h
+-index 3dd926d..0cf477a 100644
+---- a/kernel/syscall.h
+-+++ b/kernel/syscall.h
+-@@ -20,3 +20,4 @@
+- #define SYS_link   19
+- #define SYS_mkdir  20
+- #define SYS_close  21
+-+#define SYS_getreadcount 22
+-diff --git a/kernel/sysfile.c b/kernel/sysfile.c
+-index d8234ce..7e7c092 100644
+---- a/kernel/sysfile.c
+-+++ b/kernel/sysfile.c
+-@@ -16,6 +16,7 @@
+- #include "file.h"
+- #include "fcntl.h"
+- 
+-+uint64 readcount=0;
+- // Fetch the nth word-sized system call argument as a file descriptor
+- // and return both the descriptor and the corresponding struct file.
+- static int
+-@@ -76,7 +77,12 @@ sys_read(void)
+-   argint(2, &n);
+-   if(argfd(0, 0, &f) < 0)
+-     return -1;
+--  return fileread(f, p, n);
+-+  n=fileread(f, p, n);
+-+  if(n>0)
+-+  {
+-+    readcount+=n;
+-+  }
+-+  return n;
+- }
+- 
+- uint64
+-diff --git a/kernel/sysproc.c b/kernel/sysproc.c
+-index 3044d00..b8d7f94 100644
+---- a/kernel/sysproc.c
+-+++ b/kernel/sysproc.c
+-@@ -7,6 +7,8 @@
+- #include "proc.h"
+- #include "vm.h"
+- 
+-+extern uint64 readcount;
+-+
+- uint64
+- sys_exit(void)
+- {
+-@@ -105,3 +107,9 @@ sys_uptime(void)
+-   release(&tickslock);
+-   return xticks;
+- }
+-+
+-+uint64
+-+sys_getreadcount(void)
+-+{
+-+  return readcount;
+-+}
+-diff --git a/kernel/trap.c b/kernel/trap.c
+-index a41cd69..bccc579 100644
+---- a/kernel/trap.c
+-+++ b/kernel/trap.c
+-@@ -80,10 +80,28 @@ usertrap(void)
+-   if(killed(p))
+-     kexit(-1);
+- 
+--  // give up the CPU if this is a timer interrupt.
+--  if(which_dev == 2)
+-+    
+-+  #ifdef CFS
+-+   p=myproc();
+-+  //  if(p!=0)
+-+  //  printf("TRAP_CHECK: PID=%d, ticks_ran=%d, slice=%d, vruntime= %d\n",
+-+  //        p->pid, p->ticks_so_far, p->time_slice, p->vruntime);
+-+   if(which_dev == 2 && p != 0 && p->ticks_so_far >= p->time_slice)
+-+   {
+-+    //  panic("I'm panicking 89\n");
+-+    // printf("[DEBUG] 88 ticks done: %d, time slice: %d\n", p->ticks_so_far, p->time_slice);
+-     yield();
+--
+-+   }
+-+  #elif defined(FCFS)
+-+  // do nothing for FCFS
+-+  #else
+-+   // give up the CPU if this is a timer interrupt.
+-+   if(which_dev == 2)
+-+    {
+-+      // panic("[DEBUG] 95\n");
+-+      yield();
+-+    }
+-+  #endif
+-   prepare_return();
+- 
+-   // the user page table to switch to, for trampoline.S
+-@@ -151,10 +169,28 @@ kerneltrap()
+-     panic("kerneltrap");
+-   }
+- 
+-+  #ifdef CFS
+-+  struct proc* p=myproc();
+-+  // if(p!=0)
+-+  //   printf("TRAP_CHECK: PID=%d, ticks_ran=%d, slice=%d, vruntime=%d\n",
+-+  //            p->pid, p->ticks_so_far, p->time_slice, p->vruntime);
+-+  if(which_dev == 2 && p != 0 && p->ticks_so_far >= p->time_slice)
+-+  {
+-+    // printf("[DEBUG] ticks done: %d, time slice: %d\n", p->ticks_so_far, p->time_slice);
+-+    // panic("171\n");
+-+    yield();
+-+  }
+-+  #elif defined(FCFS)
+-+  // do nothing if FCFS
+-+  #else
+-   // give up the CPU if this is a timer interrupt.
+-   if(which_dev == 2 && myproc() != 0)
+-+  {
+-+    // panic("[DEBUG] 177\n");
+-     yield();
+-+  }
+- 
+-+  #endif
+-   // the yield() may have caused some traps to occur,
+-   // so restore trap registers for use by kernelvec.S's sepc instruction.
+-   w_sepc(sepc);
+-@@ -164,6 +200,7 @@ kerneltrap()
+- void
+- clockintr()
+- {
+-+  // panic("SUCCESS: clockintr() was called!");
+-   if(cpuid() == 0){
+-     acquire(&tickslock);
+-     ticks++;
+-@@ -171,6 +208,18 @@ clockintr()
+-     release(&tickslock);
+-   }
+- 
+-+  #ifdef CFS
+-+  // printf("CLOCKINTR CALLED! ticks=%d\n", ticks);
+-+  struct proc *p=myproc();
+-+
+-+  if(p!=0 && p->state == RUNNING)
+-+  {
+-+    // panic("[DEBUG] I'm being called\n");
+-+    p->vruntime+=(1024*100)/p->weight; // *100 so that cases where decimal time is there get handled properly
+-+    p->ticks_so_far++;
+-+  }
+-+  // struct proc *p = myproc();
+-+  #endif
+-   // ask for the next timer interrupt. this also clears
+-   // the interrupt request. 1000000 is about a tenth
+-   // of a second.
+-diff --git a/user/readcount.c b/user/readcount.c
+-new file mode 100644
+-index 0000000..7637e26
+---- /dev/null
+-+++ b/user/readcount.c
+-@@ -0,0 +1,23 @@
+-+#include "kernel/types.h"
+-+#include "kernel/stat.h"
+-+#include "user/user.h"
+-+int main(int argc, char* argv[])
+-+{
+-+    int fd;
+-+    char buf[100];
+-+
+-+    uint64 before=getreadcount();
+-+    printf("Initial readcount: %lu\n",before);
+-+    fd=open("../README",0); // 0= O_RDONLY in xv6
+-+
+-+    if(fd<0)
+-+    {
+-+        printf("cannot open file\n");
+-+        exit(1);
+-+    }
+-+
+-+    int n=read(fd,buf,100);
+-+    if(n>0)
+-+    printf("After readcount: %lu\n", getreadcount());
+-+    return 0;
+-+}
+-\ No newline at end of file
+-diff --git a/user/sched_demo.c b/user/sched_demo.c
+-new file mode 100644
+-index 0000000..21c2017
+---- /dev/null
+-+++ b/user/sched_demo.c
+-@@ -0,0 +1,74 @@
+-+#include "kernel/types.h"
+-+#include "kernel/stat.h"
+-+#include "user/user.h"
+-+
+-+// Simple delay function using uptime() - works reliably in RISC-V xv6
+-+void delay(int ticks) {
+-+    int start = uptime();
+-+    while (uptime() - start < ticks) {
+-+        // Busy wait - this ensures we don't interfere with scheduler testing
+-+    }
+-+}
+-+
+-+void simple_worker(char id) {
+-+    int start = uptime();
+-+    int count = 0;
+-+    
+-+    printf("Process %c starting at time %d\n", id, start);
+-+    
+-+    // Run for about 50 ticks
+-+    while (uptime() - start < 50) {
+-+        // Print our ID every so often to show when we're running
+-+        if (count % 5000 == 0) {
+-+            printf("%c", id);
+-+        }
+-+        count++;
+-+        
+-+        // Small amount of work
+-+        volatile int dummy = 0;
+-+        for (int i = 0; i < 100; i++) {
+-+            dummy += i;
+-+        }
+-+    }
+-+    
+-+    printf("\nProcess %c finished (count: %d) at time %d\n", id, count, uptime());
+-+}
+-+
+-+int main() {
+-+    printf("Simple scheduler test - watch the output pattern:\n");
+-+    printf("FCFS should show: AAA...BBB...CCC...\n");
+-+    printf("Round Robin should show: ABCABC...\n");
+-+    printf("CFS should show: fair distribution\n\n");
+-+    
+-+    int start_time = uptime();
+-+    printf("Test starting at time %d\n", start_time);
+-+    
+-+    // Create 3 processes with slight delays
+-+    if (fork() == 0) {
+-+        simple_worker('A');
+-+        exit(0);
+-+    }
+-+    
+-+    delay(2); // Use our delay function instead of sleep
+-+    
+-+    if (fork() == 0) {
+-+        simple_worker('B'); 
+-+        exit(0);
+-+    }
+-+    
+-+    delay(2);
+-+    
+-+    if (fork() == 0) {
+-+        simple_worker('C');
+-+        exit(0);
+-+    }
+-+    
+-+    // Wait for all children
+-+    wait(0);
+-+    wait(0);
+-+    wait(0);
+-+    
+-+    printf("\n\nTest completed at time %d!\n", uptime());
+-+    printf("Total test duration: %d ticks\n", uptime() - start_time);
+-+    return 0;
+-+}
+-\ No newline at end of file
+-diff --git a/user/schedulertest.c b/user/schedulertest.c
+-new file mode 100644
+-index 0000000..786a044
+---- /dev/null
+-+++ b/user/schedulertest.c
+-@@ -0,0 +1,27 @@
+-+#include "kernel/types.h"
+-+#include "kernel/stat.h"
+-+#include "user/user.h"
+-+#include "kernel/fcntl.h"
+-+
+-+#define NFORK 10
+-+#define IO 5
+-+
+-+int main() {
+-+  int n, pid;
+-+  
+-+  for (n = 0; n < NFORK; n++) {
+-+    pid = fork();
+-+    if (pid < 0)
+-+      break;
+-+    if (pid == 0) {
+-+      if (n < IO) {
+-+        // sleep(200); // IO-bound process
+-+      } else {
+-+        for (volatile int i = 0; i < 1000000000; i++) {} // CPU-bound process
+-+      }
+-+      // printf("\nProcess %d finished\n", n);
+-+      exit(0);
+-+    }
+-+  }
+-+  exit(0);
+-+}
+-diff --git a/user/user.h b/user/user.h
+-index ac84de9..028f274 100644
+---- a/user/user.h
+-+++ b/user/user.h
+-@@ -24,6 +24,7 @@ int getpid(void);
+- char* sys_sbrk(int,int);
+- int pause(int);
+- int uptime(void);
+-+uint64 getreadcount(void);
+- 
+- // ulib.c
+- int stat(const char*, struct stat*);
+-diff --git a/user/usys.pl b/user/usys.pl
+-index c5d4c3a..05223bf 100755
+---- a/user/usys.pl
+-+++ b/user/usys.pl
+-@@ -42,3 +42,4 @@ entry("getpid");
+- entry("sbrk");
+- entry("pause");
+- entry("uptime");
+-+entry("getreadcount");
