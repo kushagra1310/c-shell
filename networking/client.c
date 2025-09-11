@@ -8,6 +8,7 @@
 #include <error.h>
 #include <errno.h>
 #include "sham.h"
+
 char *server_ip_address; // loopback address
 int server_port;
 uint32_t initial_seq_num = 1; // initial seq number
@@ -68,8 +69,8 @@ int sham_end_recieve(int socket, sham_packet incoming_packet, struct sockaddr_in
     // Set a timeout on the socket
     struct timeval tv;
     tv.tv_sec = 0;
-    tv.tv_usec = RTO * 1000; // Use your RTO value for the timeout
-    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    tv.tv_usec = RTO * 1000; // Use your RTO value for the timeout (microseconds so mult by 1000)
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)); 
 
     int retrans_count = 0;
     while (retrans_count < 5) // Try up to 5 times
@@ -108,9 +109,8 @@ int sham_end_recieve(int socket, sham_packet incoming_packet, struct sockaddr_in
     // Reset socket to blocking before returning
     tv.tv_sec = 0;
     tv.tv_usec = 0;
-    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)); // SOL_SOCKET to apply changes to socket only without bothering about protocol
     return 0;
-    // LLM
 }
 // ############## LLM Generated Code Ends ##############
 
@@ -125,20 +125,19 @@ void check_timeouts(int socket, sliding_window *window, struct sockaddr_in *addr
         {
             // time elapsed since sending
             long elapsed = (now.tv_sec - window[i].sent_time.tv_sec) * 1000 + (now.tv_usec - window[i].sent_time.tv_usec) / 1000;
-            // whole number, and fractional parts managed separately
+            // whole number, and fractional parts(microseconds) managed separately
 
             if (elapsed > RTO)
             {
-                // log_event("TIMEOUT SEQ=%u", window[i].packet.header.seq_num);
+                char log_msg[100];
+                uint32_t host_seq_num = ntohl(window[i].packet.header.seq_num);
+                sprintf(log_msg, "TIMEOUT SEQ=%u", host_seq_num);
+                log_event(log_msg, log_file);
 
                 // Retransmit packet
                 sendto(socket, &window[i].packet, sizeof(sham_header) + window[i].actual_data_length, 0, (struct sockaddr *)addr, sizeof(*addr));
                 gettimeofday(&window[i].sent_time, NULL); // Reset timer
 
-                char log_msg[100];
-                uint32_t host_seq_num = ntohl(window[i].packet.header.seq_num);
-                sprintf(log_msg, "TIMEOUT SEQ=%u", host_seq_num);
-                log_event(log_msg, log_file);
 
                 sprintf(log_msg, "RETX DATA SEQ=%u LEN=%lu", host_seq_num, window[i].actual_data_length);
                 log_event(log_msg, log_file);
@@ -178,7 +177,7 @@ int send_filename(int socket, struct sockaddr_in *addr, const char *filename)
 
     packet.header.seq_num = htonl(current_seq_num);
     packet.header.ack_num = htonl(0);
-    packet.header.flags = htons(SYN); // This is likely incorrect for a filename, consider 0
+    packet.header.flags = htons(0); // This is likely incorrect for a filename, consider 0
     packet.header.window_size = htons(WINDOW_SIZE);
 
     size_t len = strlen(filename);
@@ -191,9 +190,10 @@ int send_filename(int socket, struct sockaddr_in *addr, const char *filename)
     int sent = sendto(socket, &packet, total_len, 0,
                       (struct sockaddr *)addr, sizeof(*addr));
     // not waiting for ack rn, not mentioned in doc
+
     // char log_msg[256];
     // snprintf(log_msg, sizeof(log_msg), "Sent filename: %s", filename);
-    // log_event(log_msg, log_file);
+    // log_event(log_msg, log_file); logging instructions not mentioed so commented out 
 
     return 0;
 }
@@ -215,10 +215,11 @@ int send_file(int socket, struct sockaddr_in *addr, char *filename)
     {
         sliding_window_arr[i].in_use = 0;
     }
-
+    // sliding window empty rn
     sham_header incoming_ack;
     socklen_t addr_len = sizeof(*addr);
     int file_complete = 0;
+
     while (!file_complete || are_there_unack(sliding_window_arr))
     {
         while (!file_complete)
@@ -235,7 +236,7 @@ int send_file(int socket, struct sockaddr_in *addr, char *filename)
                 break;
             }
 
-            read_bytes = fread(arr, 1, 1024, file);
+            read_bytes = fread(arr, 1, 1024, file); // reading upto 1024 lines from the file
             if (!read_bytes)
             {
                 file_complete = 1;
@@ -290,7 +291,7 @@ int send_file(int socket, struct sockaddr_in *addr, char *filename)
                         uint32_t packet_end = packet_start_seq + sliding_window_arr[i].actual_data_length;
                         if (packet_end <= ack_num)
                         {
-                            sliding_window_arr[i].in_use = 0; // Free the slot
+                            sliding_window_arr[i].in_use = 0; // free the slot
                             // printf("Packet SEQ=%u acknowledged\n", ntohl(sliding_window_arr[i].packet.header.seq_num));
                         }
                     }
@@ -311,7 +312,7 @@ void print_header(sham_header to_be_printed)
     printf("ack_num: %u\n", to_be_printed.ack_num);
     printf("flags: %u\n", to_be_printed.flags);
     printf("window_size: %u\n", to_be_printed.window_size);
-}
+} // for debugging
 
 int sham_server_accept(int client_socket, struct sockaddr_in *server_address_in)
 {
@@ -659,7 +660,7 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
-    // ############## LLM Generated Code Begins ############## //LLM prompt given to change it minimally later as prev one was unrealiable
+    // ############## LLM Generated Code Begins ############## // LLM prompt given to change it minimally later as prev one was unrealiable
     for (int i = 3; i < argc; i++)
     {
         if (strcmp(argv[i], "--chat") == 0)

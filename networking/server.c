@@ -31,11 +31,11 @@ void print_header(sham_header to_be_printed)
 // ############## LLM Generated Code Begins ##############
 int sham_end_recieve(int socket, sham_packet incoming_packet, struct sockaddr_in *addr)
 {
-    // LLM
     incoming_packet.header.seq_num = ntohl(incoming_packet.header.seq_num);
     incoming_packet.header.flags = ntohs(incoming_packet.header.flags);
 
     char log_msg[100];
+
     // Step 1: Receive FIN
     sprintf(log_msg, "RCV FIN SEQ=%u", incoming_packet.header.seq_num);
     log_event(log_msg, log_file);
@@ -49,8 +49,7 @@ int sham_end_recieve(int socket, sham_packet incoming_packet, struct sockaddr_in
     ack_response.ack_num = htonl(incoming_packet.header.seq_num + 1);
 
     log_event("SND ACK FOR FIN", log_file);
-    sendto(socket, &ack_response, sizeof(ack_response), 0,
-           (struct sockaddr *)addr, sizeof(*addr));
+    sendto(socket, &ack_response, sizeof(ack_response), 0, (struct sockaddr *)addr, sizeof(*addr));
 
     // ---- Simulate CLOSE-WAIT ----
     // Step 3: Send our FIN
@@ -64,8 +63,7 @@ int sham_end_recieve(int socket, sham_packet incoming_packet, struct sockaddr_in
     fin_response.flags = htons(FIN);
     fin_response.seq_num = htonl(my_fin_seq);
 
-    sendto(socket, &fin_response, sizeof(fin_response), 0,
-           (struct sockaddr *)addr, sizeof(*addr));
+    sendto(socket, &fin_response, sizeof(fin_response), 0, (struct sockaddr *)addr, sizeof(*addr));
 
     // Step 4: Wait for their ACK to our FIN, with retransmission
     sham_header incoming_ack;

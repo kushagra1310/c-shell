@@ -5,20 +5,25 @@ Things left to fix:
 check if root directory needs to be fixed for reveal
 fg concatenation bug
 error handling for some functions
-return instead of exit
+<!-- return instead of exit -->
 input/output/appending rechecking
-hardcoded file path
+<!-- hardcoded file path -->
 check when the background execution message has to be displayed
-only bg ones handled in e1
-confirm exact requirements of ctrl c, ctrl d
-logout printing
+<!-- only bg ones handled in e1 -->
+<!-- confirm exact requirements of ctrl c, ctrl d -->
+<!-- logout printing -->
 check when to print bg job is completed
-log issue invalid syntax
-multiple redirection error msg as soon as encountered
+<!-- log issue invalid syntax -->
+
+<!-- the background thing -->
+<!-- multiple redirection error msg as soon as encountered, as in original bash -->
 <!-- log file spacing issue -->
 ### Part A2
 Things left to fix:
-windowsize variable
+<!-- windowsize variable
 window_size
-termination handling
+termination handling -->
 buffer in client
+Assumptions:
+resend ack/fin/other stuff not required as data packets are mentioned not control packets
+sliding window not used for chat mode, instead retransmitting after 200 ms, also message length limit is 1024 bytes

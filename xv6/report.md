@@ -11,5 +11,6 @@ Wrote the program in the user directory and read 100 bytes from a random file. S
 Added extra field in the process struct for tracking arrival time. When scheduler wants to decide it scans through the process array and chooses the one with the earliest arrival time. After that schedule that process and move on.
 ## CFS
 Added extra fields in the process struct for tracking time slice, runtime and ticks ran till now. Made corresponding changes in the clockintr() function and usertrap() and kerneltrap() functions as well, so that the interrupt raised by yield occours only after the time slice is consumed by the process.
+For the scheduling part, instead of keeping them all in ascending order, which would take o(n) in each iteration anyway (to shift processes after one is done), I'm repeatedly scanning and bringing the job with the least vruntime to the front. 
 ## LOGGING
 Didn't implement as printf statements messed up the scheduler completely due to their slow nature. A function like scheduler can't handle slow calls like it, so logging wasn't practically possible while ensuring efficiency of the system.
