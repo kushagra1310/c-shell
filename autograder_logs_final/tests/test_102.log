@@ -1,0 +1,91 @@
+{
+    "testcase": {
+        "section": "D.2",
+        "description": "Tests that a background command that fails produces an 'exited abnormally' message.",
+        "cmds": [
+            {
+                "expect_exit": false,
+                "skip_prompt_check": false,
+                "cmd": "false &",
+                "sequential_outputs": [],
+                "nonsequential_outputs": [
+                    {
+                        "text": "\\\\[1\\\\] \\\\d+",
+                        "is_re": true,
+                        "negative_match": false
+                    }
+                ],
+                "ignore_output": true,
+                "cwd_after": null
+            },
+            {
+                "expect_exit": false,
+                "skip_prompt_check": false,
+                "cmd": "echo check abnormal exit",
+                "sequential_outputs": [
+                    {
+                        "text": "check abnormal exit",
+                        "is_re": false,
+                        "negative_match": false
+                    }
+                ],
+                "nonsequential_outputs": [
+                    {
+                        "text": "false with pid \\\\d+ exited abnormally",
+                        "is_re": true,
+                        "negative_match": false
+                    }
+                ],
+                "ignore_output": false,
+                "cwd_after": null
+            }
+        ],
+        "timeout": 2.0,
+        "strict_prompt": false,
+        "requires_test_folder": false
+    },
+    "events": [
+        {
+            "time": "2025-11-30T18:10:55.430979+05:30",
+            "type": "output",
+            "details": "<osnuser@osntesting:~> "
+        },
+        {
+            "time": "2025-11-30T18:10:55.431211+05:30",
+            "type": "input",
+            "details": "GenericCmd(expect_exit=False, skip_prompt_check=False, cmd='false &', sequential_outputs=[], nonsequential_outputs=[Line(text='\\\\\\\\[1\\\\\\\\] \\\\\\\\d+', is_re=True, negative_match=False)], ignore_output=True, cwd_after=None)"
+        },
+        {
+            "time": "2025-11-30T18:10:55.482639+05:30",
+            "type": "output",
+            "details": "[1] 30"
+        },
+        {
+            "time": "2025-11-30T18:10:55.484395+05:30",
+            "type": "output",
+            "details": "<osnuser@osntesting:~> "
+        },
+        {
+            "time": "2025-11-30T18:10:55.484606+05:30",
+            "type": "input",
+            "details": "GenericCmd(expect_exit=False, skip_prompt_check=False, cmd='echo check abnormal exit', sequential_outputs=[Line(text='check abnormal exit', is_re=False, negative_match=False)], nonsequential_outputs=[Line(text='false with pid \\\\\\\\d+ exited abnormally', is_re=True, negative_match=False)], ignore_output=False, cwd_after=None)"
+        },
+        {
+            "time": "2025-11-30T18:10:55.536421+05:30",
+            "type": "output",
+            "details": "false  with pid 30 exited normally"
+        },
+        {
+            "time": "2025-11-30T18:10:55.570485+05:30",
+            "type": "output",
+            "details": "check abnormal exit"
+        },
+        {
+            "time": "2025-11-30T18:10:55.573102+05:30",
+            "type": "output",
+            "details": "<osnuser@osntesting:~> "
+        }
+    ],
+    "raw_log": "##### START RAW OUTPUT #####\n<osnuser@osntesting:~> false &\n[1] 30\r\n<osnuser@osntesting:~> echo check abnormal exit\n\r\nfalse  with pid 30 exited normally\r\ncheck abnormal exit\r\n<osnuser@osntesting:~> ",
+    "py_log": "2025-11-30 18:10:54,477 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - INFO - Spawned child:\n    <pexpect.pty_spawn.spawn object at 0x7c4d601094f0>\n    command: /usr/bin/docker\n    args: [b'/usr/bin/docker', b'run', b'--name', b'tester_29119586b3d04c47a081ad2dd658e097', b'-i', b'-t', b'--rm', b'--init', b'-h', b'osntesting', b'-v', b'/tmp/tmp9q3ep2h1:/app', b'-w', b'/app', b'shell_tester:latest', b'/app/shell.out']\n    buffer (last 100 chars): ''\n    before (last 100 chars): ''\n    after: None\n    match: None\n    match_index: None\n    exitstatus: None\n    flag_eof: False\n    pid: 1067619\n    child_fd: 46\n    closed: False\n    timeout: 2.0\n    delimiter: <class 'pexpect.exceptions.EOF'>\n    logfile: <tester.FlexibleIO object at 0x7c4d611fa2c0>\n    logfile_read: None\n    logfile_send: None\n    maxread: 2000\n    ignorecase: False\n    searchwindowsize: None\n    delaybeforesend: 0.05\n    delayafterclose: 0.1\n    delayafterterminate: 0.1\n2025-11-30 18:10:55,431 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T18:10:55.430979+05:30\",\n        \"type\": \"output\",\n        \"details\": \"<osnuser@osntesting:~> \"\n    }\n2025-11-30 18:10:55,431 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T18:10:55.431211+05:30\",\n        \"type\": \"input\",\n        \"details\": \"GenericCmd(expect_exit=False, skip_prompt_check=False, cmd='false &', sequential_outputs=[], nonsequential_outputs=[Line(text='\\\\\\\\\\\\\\\\[1\\\\\\\\\\\\\\\\] \\\\\\\\\\\\\\\\d+', is_re=True, negative_match=False)], ignore_output=True, cwd_after=None)\"\n    }\n2025-11-30 18:10:55,482 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T18:10:55.482639+05:30\",\n        \"type\": \"output\",\n        \"details\": \"[1] 30\"\n    }\n2025-11-30 18:10:55,484 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T18:10:55.484395+05:30\",\n        \"type\": \"output\",\n        \"details\": \"<osnuser@osntesting:~> \"\n    }\n2025-11-30 18:10:55,484 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T18:10:55.484606+05:30\",\n        \"type\": \"input\",\n        \"details\": \"GenericCmd(expect_exit=False, skip_prompt_check=False, cmd='echo check abnormal exit', sequential_outputs=[Line(text='check abnormal exit', is_re=False, negative_match=False)], nonsequential_outputs=[Line(text='false with pid \\\\\\\\\\\\\\\\d+ exited abnormally', is_re=True, negative_match=False)], ignore_output=False, cwd_after=None)\"\n    }\n2025-11-30 18:10:55,536 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T18:10:55.536421+05:30\",\n        \"type\": \"output\",\n        \"details\": \"false  with pid 30 exited normally\"\n    }\n2025-11-30 18:10:55,570 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T18:10:55.570485+05:30\",\n        \"type\": \"output\",\n        \"details\": \"check abnormal exit\"\n    }\n2025-11-30 18:10:55,573 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T18:10:55.573102+05:30\",\n        \"type\": \"output\",\n        \"details\": \"<osnuser@osntesting:~> \"\n    }\n2025-11-30 18:10:55,979 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - INFO - Finished running testcase. Child info at exit:\n    <pexpect.pty_spawn.spawn object at 0x7c4d601094f0>\n    command: /usr/bin/docker\n    args: [b'/usr/bin/docker', b'run', b'--name', b'tester_29119586b3d04c47a081ad2dd658e097', b'-i', b'-t', b'--rm', b'--init', b'-h', b'osntesting', b'-v', b'/tmp/tmp9q3ep2h1:/app', b'-w', b'/app', b'shell_tester:latest', b'/app/shell.out']\n    buffer (last 100 chars): ''\n    before (last 100 chars): ''\n    after: '<osnuser@osntesting:~> '\n    match: <re.Match object; span=(0, 23), match='<osnuser@osntesting:~> '>\n    match_index: 0\n    exitstatus: 129\n    flag_eof: False\n    pid: 1067619\n    child_fd: -1\n    closed: True\n    timeout: 2.0\n    delimiter: <class 'pexpect.exceptions.EOF'>\n    logfile: <tester.FlexibleIO object at 0x7c4d611fa2c0>\n    logfile_read: None\n    logfile_send: None\n    maxread: 2000\n    ignorecase: False\n    searchwindowsize: None\n    delaybeforesend: 0.05\n    delayafterclose: 0.1\n    delayafterterminate: 0.1\n2025-11-30 18:10:55,979 - tester.422e237e-6c45-42ca-b69b-95224f58d88f - INFO - Cleaned up temp_dir: /tmp/tmp9q3ep2h1\n"
+}

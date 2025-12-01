@@ -1,0 +1,50 @@
+{
+    "testcase": {
+        "section": "C.4",
+        "description": "Tests a long pipeline to ensure multiple pipes are handled correctly.",
+        "cmds": [
+            {
+                "expect_exit": false,
+                "skip_prompt_check": false,
+                "cmd": "echo test | cat | cat | cat | wc -c",
+                "sequential_outputs": [
+                    {
+                        "text": "5",
+                        "is_re": false,
+                        "negative_match": false
+                    }
+                ],
+                "nonsequential_outputs": [],
+                "ignore_output": false,
+                "cwd_after": null
+            }
+        ],
+        "timeout": 2.0,
+        "strict_prompt": false,
+        "requires_test_folder": false
+    },
+    "events": [
+        {
+            "time": "2025-11-30T06:26:23.702548+05:30",
+            "type": "output",
+            "details": "<osnuser@osntesting:~> "
+        },
+        {
+            "time": "2025-11-30T06:26:23.703244+05:30",
+            "type": "input",
+            "details": "GenericCmd(expect_exit=False, skip_prompt_check=False, cmd='echo test | cat | cat | cat | wc -c', sequential_outputs=[Line(text='5', is_re=False, negative_match=False)], nonsequential_outputs=[], ignore_output=False, cwd_after=None)"
+        },
+        {
+            "time": "2025-11-30T06:26:23.796303+05:30",
+            "type": "output",
+            "details": "5"
+        },
+        {
+            "time": "2025-11-30T06:26:23.796703+05:30",
+            "type": "output",
+            "details": "<osnuser@osntesting:~> "
+        }
+    ],
+    "raw_log": "##### START RAW OUTPUT #####\n<osnuser@osntesting:~> echo test | cat | cat | cat | wc -c\n5\r\n<osnuser@osntesting:~> ",
+    "py_log": "2025-11-30 06:26:22,900 - tester.cbf8faaa-16df-4a8e-8e88-18a9a938bb64 - INFO - Spawned child:\n    <pexpect.pty_spawn.spawn object at 0x7984b2715eb0>\n    command: /usr/bin/docker\n    args: [b'/usr/bin/docker', b'run', b'--name', b'tester_1938dfd493a04ab8a40898fd0774cacf', b'-i', b'-t', b'--rm', b'--init', b'-h', b'osntesting', b'-v', b'/tmp/tmpenxib62q:/app', b'-w', b'/app', b'shell_tester:latest', b'/app/shell.out']\n    buffer (last 100 chars): ''\n    before (last 100 chars): ''\n    after: None\n    match: None\n    match_index: None\n    exitstatus: None\n    flag_eof: False\n    pid: 1668202\n    child_fd: 205\n    closed: False\n    timeout: 2.0\n    delimiter: <class 'pexpect.exceptions.EOF'>\n    logfile: <tester.FlexibleIO object at 0x79851bf23d00>\n    logfile_read: None\n    logfile_send: None\n    maxread: 2000\n    ignorecase: False\n    searchwindowsize: None\n    delaybeforesend: 0.05\n    delayafterclose: 0.1\n    delayafterterminate: 0.1\n2025-11-30 06:26:23,702 - tester.cbf8faaa-16df-4a8e-8e88-18a9a938bb64 - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T06:26:23.702548+05:30\",\n        \"type\": \"output\",\n        \"details\": \"<osnuser@osntesting:~> \"\n    }\n2025-11-30 06:26:23,703 - tester.cbf8faaa-16df-4a8e-8e88-18a9a938bb64 - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T06:26:23.703244+05:30\",\n        \"type\": \"input\",\n        \"details\": \"GenericCmd(expect_exit=False, skip_prompt_check=False, cmd='echo test | cat | cat | cat | wc -c', sequential_outputs=[Line(text='5', is_re=False, negative_match=False)], nonsequential_outputs=[], ignore_output=False, cwd_after=None)\"\n    }\n2025-11-30 06:26:23,796 - tester.cbf8faaa-16df-4a8e-8e88-18a9a938bb64 - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T06:26:23.796303+05:30\",\n        \"type\": \"output\",\n        \"details\": \"5\"\n    }\n2025-11-30 06:26:23,796 - tester.cbf8faaa-16df-4a8e-8e88-18a9a938bb64 - DEBUG - Received event:\n    {\n        \"time\": \"2025-11-30T06:26:23.796703+05:30\",\n        \"type\": \"output\",\n        \"details\": \"<osnuser@osntesting:~> \"\n    }\n2025-11-30 06:26:24,476 - tester.cbf8faaa-16df-4a8e-8e88-18a9a938bb64 - INFO - Finished running testcase. Child info at exit:\n    <pexpect.pty_spawn.spawn object at 0x7984b2715eb0>\n    command: /usr/bin/docker\n    args: [b'/usr/bin/docker', b'run', b'--name', b'tester_1938dfd493a04ab8a40898fd0774cacf', b'-i', b'-t', b'--rm', b'--init', b'-h', b'osntesting', b'-v', b'/tmp/tmpenxib62q:/app', b'-w', b'/app', b'shell_tester:latest', b'/app/shell.out']\n    buffer (last 100 chars): ''\n    before (last 100 chars): ''\n    after: '<osnuser@osntesting:~> '\n    match: <re.Match object; span=(0, 23), match='<osnuser@osntesting:~> '>\n    match_index: 0\n    exitstatus: None\n    flag_eof: False\n    pid: 1668202\n    child_fd: -1\n    closed: True\n    timeout: 2.0\n    delimiter: <class 'pexpect.exceptions.EOF'>\n    logfile: <tester.FlexibleIO object at 0x79851bf23d00>\n    logfile_read: None\n    logfile_send: None\n    maxread: 2000\n    ignorecase: False\n    searchwindowsize: None\n    delaybeforesend: 0.05\n    delayafterclose: 0.1\n    delayafterterminate: 0.1\n2025-11-30 06:26:24,477 - tester.cbf8faaa-16df-4a8e-8e88-18a9a938bb64 - INFO - Cleaned up temp_dir: /tmp/tmpenxib62q\n"
+}
