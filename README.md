@@ -1,7 +1,9 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/fkrRRp25)
-## ASSUMPTIONS
+## Directions to run
+### Shell:
+1) Run ```make all``` inside the /shell directory
+2) Run ```./shell.out```
 ### Networking:
-resend ack/fin/other stuff not required as data packets are mentioned not control packets
-sliding window not used for chat mode, instead retransmitting after 200 ms, also message length limit is 1024 bytes
-### xv6:
-Logging not done as printf is slow and messes up scheduler. Other mentioned in report
+1) Compile server.c using ```gcc server.c -o server```
+2) Compile client.c using ```gcc client.c -o client```
+3) Run ```./server <port> [--chat] [loss_rate]``` (based on your modes of operation in the placeholders)
+4) Run  ```./client <server_ip> <server_port> <input_file> <output_file_name> [loss_rate]``` for file transfer mode, or ```./client <server_ip> <server_port> --chat [loss_rate]``` for chat mode.
